@@ -681,7 +681,7 @@ window.saveRoutineItem=async rid=>{
 window.editRoutine=rid=>{
   const r=routines[rid];
   openModal('<h2>Edit routine</h2><label>Routine name</label><input id="f-rname" value="'+esc(r.title)+'">'
-    +'(fam().length?'<label>Belongs to</label><select id="f-rwho">'+whoOptions(r.who)+'</select>':"")
+    +(fam().length?'<label>Belongs to</label><select id="f-rwho">'+whoOptions(r.who)+'</select>':"")
     +'<label>Steps (one per line — unchecked order is kept)</label><textarea id="f-ritems" rows="6">'+esc(r.items.map(i=>i.text).join("\n"))+'</textarea>'
     +'<div class="btnrow"><button class="btn" onclick="saveRoutineEdit(\''+rid+'\')">Save</button><button class="btn ghost" style="color:var(--danger);border-color:var(--danger);" onclick="delRoutine(\''+rid+'\')">Delete</button><button class="btn ghost" onclick="closeModal()">Cancel</button></div>');
 };
