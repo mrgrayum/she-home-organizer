@@ -325,7 +325,7 @@ $("modal-bg").addEventListener("click", e=>{ if(e.target===$("modal-bg")) closeM
 function openModal(html){ $("modal").innerHTML=html; $("modal-bg").classList.add("open"); }
 
 /* ---------------- firebase ---------------- */
-let db=null, U=null, unsubs=[];
+let db=null, U=null, unsubs=[], syncReady=false, syncSeen={};
 if(!FIREBASE_READY){
   $("setup-screen").classList.remove("hidden");
 }else{
@@ -337,8 +337,8 @@ if(!FIREBASE_READY){
   }).finally(startAuth);
   function startAuth(){
     firebase.auth().onAuthStateChanged(user=>{
-      if(user){ U=user; $("welcome-screen").classList.add("hidden"); boot(); }
-      else { unsubs.forEach(u=>u()); unsubs=[]; $("app").classList.add("hidden"); $("welcome-screen").classList.remove("hidden"); }
+      if(user){ const changed=!U||U.uid!==user.uid; U=user; if(changed) resetLocalState(); $("welcome-screen").classList.add("hidden"); boot(); }
+      else { U=null; resetLocalState(); $("app").classList.add("hidden"); $("welcome-screen").classList.remove("hidden"); }
     });
   }
 }
@@ -358,7 +358,7 @@ if(!FIREBASE_READY){
       const em=$("w-email").value.trim(), pw=$("w-pass").value;
       $("w-err").textContent=!em?"Enter the family email.":(!pw?"Enter the password.":"");
       if(!em||!pw) return;
-      firebase.auth().signInWithEmailAndPassword(em,pw).catch(e=>{ $("w-err").textContent=friendlyAuthErr(e); });
+      firebase.auth().signInWithEmailAndPassword(em,pw).then(()=>location.reload()).catch(e=>{ $("w-err").textContent=friendlyAuthErr(e); });
     };
     window.continueGuest=()=>{
       firebase.auth().signInAnonymously().catch(e=>{ $("w-err").textContent="Couldn't start — check your connection and reload."; });
@@ -371,8 +371,9 @@ if(!FIREBASE_READY){
         .then(()=>{ toast("Family login created 🎉"); renderAccount(); })
         .catch(e=>{ $("ac-err").textContent=friendlyAuthErr(e); });
     };
-    window.joinFamilyLogin=()=>{
-      if(!confirm("Switch this device to the family login? Anything saved only on this device will stay behind.")) return;
+        window.joinFamilyLogin=async ()=>{
+      if(!confirm("Switch this device to the family login?\n\nFirst, a backup file of the lists on THIS device will download — keep it, just in case.\n\nAfter switching, this device shows the family account's lists. Anything saved only on this device will NOT be merged into the family account.")) return;
+      await exportAll().catch(()=>{});
       firebase.auth().signOut();
     };
     window.familySignOut=()=>{ if(confirm("Sign out of the family account on this device?")) firebase.auth().signOut(); };
@@ -393,42 +394,56 @@ if(!FIREBASE_READY){
     }
 /* ---------------- data layer ---------------- */
 let cards=[], routines={}, dayDoc=null, settingsDoc=null, currentCat="all";
+function resetLocalState(){
+  unsubs.forEach(u=>u()); unsubs=[];
+  cards=[]; routines={}; dayDoc=null; settingsDoc=null;
+  syncReady=false; syncSeen={};
+}
+function noteSync(k){
+  syncSeen[k]=true;
+  if(syncSeen.cards&&syncSeen.routines&&syncSeen.day&&syncSeen.settings) syncReady=true;
+}
+function writeGate(){
+  if(syncReady) return true;
+  toast("Still syncing your lists — give it a second.");
+  return false;
+}
 let orderMode=false, routineOrderMode=false;
 const col = name => db.collection("users").doc(U.uid).collection(name);
 const dayRef = () => col("days").doc(todayStr());
 
 function listenAll(){
   unsubs.forEach(u=>u()); unsubs=[];
-  unsubs.push(col("cards").onSnapshot(s=>{ cards=s.docs.map(d=>Object.assign({id:d.id},d.data())); render(); }));
-  unsubs.push(col("routines").onSnapshot(s=>{ routines={}; s.docs.forEach(d=>routines[d.id]=Object.assign({id:d.id},d.data())); render(); }));
-  unsubs.push(dayRef().onSnapshot(s=>{ dayDoc=s.exists?Object.assign({id:s.id},s.data()):{id:todayStr(),done:{},refiles:{},routines:{}}; render(); }));
-  unsubs.push(col("settings").doc("main").onSnapshot(s=>{ settingsDoc=s.exists?s.data():null; render(); }));
+  unsubs.push(col("cards").onSnapshot(s=>{ cards=s.docs.map(d=>Object.assign({id:d.id},d.data())); noteSync("cards"); render(); }));
+  unsubs.push(col("routines").onSnapshot(s=>{ routines={}; s.docs.forEach(d=>routines[d.id]=Object.assign({id:d.id},d.data())); noteSync("routines"); render(); }));
+  unsubs.push(dayRef().onSnapshot(s=>{ dayDoc=s.exists?Object.assign({id:s.id},s.data()):{id:todayStr(),done:{},refiles:{},routines:{}}; noteSync("day"); render(); }));
+  unsubs.push(col("settings").doc("main").onSnapshot(s=>{ settingsDoc=s.exists?s.data():null; noteSync("settings"); render(); }));
 }
-async function saveCard(card){
+async function saveCard(card){ if(!writeGate()) return;
   const data=Object.assign({},card); delete data.id;
   if(card.id) await col("cards").doc(card.id).set(data,{merge:true});
   else await col("cards").add(Object.assign({active:true,createdAt:firebase.firestore.FieldValue.serverTimestamp()},data));
 }
 
-async function markDone(id){
+async function markDone(id){ if(!writeGate()) return;
   const t=todayStr();
   await dayRef().set({done:Object.assign({},(dayDoc&&dayDoc.done)||{},{[id]:true})},{merge:true});
   const c=cards.find(c=>c.id===id);
   if(c && c.cadence==="once") await col("cards").doc(id).set({doneEver:true},{merge:true});
   toast("Done! Nice work. 🎉");
 }
-async function refileCard(id, when){
+async function refileCard(id, when){ if(!writeGate()) return;
   const t=todayStr();
   let target = when==="tomorrow" ? addDaysStr(t,1) : when==="week" ? addDaysStr(t,3) : addDaysStr(t,7);
   await col("cards").doc(id).set({refileUntil:target},{merge:true});
   toast("Parked until "+fmtDay(target)+" \u2014 off your list, not lost. \ud83d\udc9b");
 }
-async function toggleRoutineItem(rid, itemId){
+async function toggleRoutineItem(rid, itemId){ if(!writeGate()) return;
   const t=todayStr(); const cur=((dayDoc&&dayDoc.routines)||{})[rid]||[];
   const next = cur.includes(itemId) ? cur.filter(i=>i!==itemId) : cur.concat(itemId);
   await dayRef().set({routines:Object.assign({},(dayDoc&&dayDoc.routines)||{},{[rid]:next})},{merge:true});
 }
-async function saveRoutine(rid, routine){
+async function saveRoutine(rid, routine){ if(!writeGate()) return;
   const data=Object.assign({},routine); delete data.id;
   await col("routines").doc(rid).set(data,{merge:true});
 }
@@ -463,12 +478,20 @@ function starterRoutines(){
 async function seedIfNeeded(){
   const s=await col("settings").doc("main").get();
   if(s.exists && s.data().seeded) return;
+  // Safety: an account that already has content is never re-seeded —
+  // just flag it, so starter content can never overwrite real lists.
+  const cs=await col("cards").limit(1).get().catch(()=>null);
+  const rs=await col("routines").limit(1).get().catch(()=>null);
+  if((cs&&!cs.empty)||(rs&&!rs.empty)){
+    await col("settings").doc("main").set({seeded:true},{merge:true});
+    return;
+  }
   const batch=db.batch();
   starterCards().forEach(c=>batch.set(col("cards").doc(),Object.assign({createdAt:firebase.firestore.FieldValue.serverTimestamp()},c)));
   const r=starterRoutines();
   batch.set(col("routines").doc("morning"),r.morning);
   batch.set(col("routines").doc("evening"),r.evening);
-  batch.set(col("settings").doc("main"),{seeded:true,seededAt:firebase.firestore.FieldValue.serverTimestamp()});
+  batch.set(col("settings").doc("main"),{seeded:true,seededAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
   await batch.commit();
 }
 
@@ -517,7 +540,7 @@ function renderFamily(){
   const list=fam();
   el.innerHTML=list.length?list.map(m=>'<div class="taskrow"><span style="width:14px;height:14px;border-radius:99px;background:'+m.color+';flex:none"></span><div class="tt"><b>'+esc(m.name)+'</b></div><button class="iconbtn" onclick="delFamMember(\''+m.id+'\')" title="Remove">🗑️</button></div>').join(""):'<p class="progress-note">Just you for now — add everyone else below.</p>';
 }
-window.addFamMember=()=>{
+window.addFamMember=()=>{ if(!writeGate()) return;
   const inp=$("fam-name"), name=inp.value.trim();
   if(!name){ toast("Give them a name first."); return; }
   const list=fam().slice();
@@ -528,7 +551,7 @@ window.delFamMember=id=>{
   const m=memberById(id); if(!m) return;
   openModal('<h2>Remove '+esc(m.name)+'?</h2><p class="progress-note">Their cards become shared household cards.</p><div class="btnrow"><button class="btn" style="background:var(--danger);" onclick="doDelFam(\''+id+'\')">Remove</button><button class="btn ghost" onclick="closeModal()">Cancel</button></div>');
 };
-window.doDelFam=id=>{
+window.doDelFam=id=>{ if(!writeGate()) return;
   const list=fam().filter(m=>m.id!==id);
   closeModal();
   col("settings").doc("main").set({family:list},{merge:true}).then(render).catch(e=>toast("Couldn't save \u2014 check connection."));
@@ -621,10 +644,10 @@ function normCardOrder(){
 }
 window.toggleOrder=()=>{
   orderMode=!orderMode;
-  if(orderMode&&db){ dayRef().set({cardOrder:normCardOrder()},{merge:true}).catch(e=>toast("Couldn't save — check connection.")); }
+  if(orderMode&&db&&syncReady){ dayRef().set({cardOrder:normCardOrder()},{merge:true}).catch(e=>toast("Couldn't save — check connection.")); }
   render();
 };
-window.moveCard=(id,dir)=>{
+window.moveCard=(id,dir)=>{ if(!writeGate()) return;
   const vis=onDeck().filter(c=>whoVisible(c.who)).map(c=>c.id);
   const ord=normCardOrder();
   const vi=vis.indexOf(id), vj=vi+dir;
@@ -755,7 +778,7 @@ function normRoutineOrder(){
   return ord;
 }
 window.toggleRoutineOrder=()=>{ routineOrderMode=!routineOrderMode; render(); };
-window.moveRoutine=(rid,dir)=>{
+window.moveRoutine=(rid,dir)=>{ if(!writeGate()) return;
   const ord=normRoutineOrder();
   const i=ord.indexOf(rid), j=i+dir;
   if(i<0||j<0||j>=ord.length) return;
@@ -934,21 +957,22 @@ async function importAll(file){
   const text=await file.text();
   let data; try{ data=JSON.parse(text); }catch(e){ toast("That file isn't a valid backup."); return; }
   if(!data.cards||!data.routines){ toast("That file doesn't look like an organizer backup."); return; }
-  if(!confirm("Import this backup? It will add "+data.cards.length+" cards and merge routines. Current data stays unless a card has the same ID.")) return;
+  if(!confirm("Import this backup? It will add "+data.cards.length+" cards and merge routines, and restore the family list and settings. Current data stays unless a card has the same ID.")) return;
   const batch=db.batch();
   data.cards.forEach(c=>{ const d=Object.assign({},c); const id=d.id; delete d.id; batch.set(col("cards").doc(id),d,{merge:true}); });
   Object.keys(data.routines).forEach(rid=>batch.set(col("routines").doc(rid),data.routines[rid],{merge:true}));
   (data.days||[]).forEach(dd=>{ const d=Object.assign({},dd); const id=d.id; delete d.id; batch.set(col("days").doc(id),d,{merge:true}); });
+  if(data.settings) batch.set(col("settings").doc("main"),data.settings,{merge:true});
   await batch.commit().catch(e=>toast("Import failed — check connection."));
   toast("Backup imported. 🗂️");
 }
-async function reseed(){
+async function reseed(){ if(!writeGate()) return;
   if(!confirm("Restore the starter cards? This adds the original SHE starter set alongside your cards.")) return;
   const batch=db.batch();
   starterCards().forEach(c=>batch.set(col("cards").doc(),Object.assign({createdAt:firebase.firestore.FieldValue.serverTimestamp()},c)));
   await batch.commit(); toast("Starter cards restored.");
 }
-async function wipeAll(){
+async function wipeAll(){ if(!writeGate()) return;
   if(!confirm("Erase EVERYTHING — all cards, routines, and history? This can't be undone.")) return;
   if(!confirm("Really sure? Export a backup first if there's anything you want to keep.")) return;
   const kills=async(coll)=>{ const s=await col(coll).get(); const b=db.batch(); s.forEach(d=>b.delete(d.ref)); await b.commit(); };
