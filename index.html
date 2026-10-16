@@ -78,6 +78,10 @@ label{font-size:.85rem; font-weight:600; color:var(--ink-soft); display:block; m
 .bcol-bar{height:6px;border-radius:99px;background:var(--line);margin-bottom:.4rem;overflow:hidden;}
 .bcol-bar>div{height:100%;background:var(--sage);border-radius:99px;transition:width .3s;}
 .broutine{border-top:1px solid var(--line);margin-top:.35rem;}
+.broute-head{display:flex;align-items:center;gap:.45rem;min-height:44px;cursor:pointer;}
+.broute-head .chev{color:var(--ink-soft);font-size:.8rem;width:1em;flex:none;}
+.broute-head .progress-note{margin-left:auto;}
+.broute-steps{padding-bottom:.2rem;}
 .who-tag{display:inline-block;font-size:.68rem;font-weight:700;padding:.08rem .5rem;border-radius:99px;margin-left:.35rem;vertical-align:middle;white-space:nowrap;}
 .tabs{position:fixed; bottom:0; left:0; right:0; z-index:30; display:flex;
   background:#fffdf8; border-top:1px solid var(--line);
@@ -805,11 +809,16 @@ function boardRow(c){
 function boardRoutine(rid){
   const r=routines[rid], checks=(((dayDoc&&dayDoc.routines)||{})[rid])||[];
   const nd=r.items.filter(i=>!checks.includes(i.id)).length;
-  return '<div class="broutine"><div style="margin:.35rem 0 .15rem"><b>'+esc(r.title)+'</b> <span class="progress-note">'+(nd?nd+" left":"done \u2728")+'</span></div>'
-    +r.items.map(it=>'<div class="taskrow'+(checks.includes(it.id)?" done":"")+'">'
+  const open=window._boardOpen&&window._boardOpen[rid];
+  return '<div class="broutine"><div class="broute-head" onclick="toggleBoardRoutine(\''+rid+'\')">'
+    +'<span class="chev">'+(open?"\u25BE":"\u25B8")+'</span><b>'+esc(r.title)+'</b><span class="progress-note">'+(nd?nd+" left":"done \u2728")+'</span></div>'
+    +(open?'<div class="broute-steps">'+r.items.map(it=>'<div class="taskrow'+(checks.includes(it.id)?" done":"")+'">'
       +'<button class="check'+(checks.includes(it.id)?" done":"")+'" onclick="togRoutine(\''+rid+'\',\''+it.id+'\')">'+(checks.includes(it.id)?"\u2713":"")+'</button>'
-      +'<div class="tt">'+esc(it.text)+'</div></div>').join("")+'</div>';
+      +'<div class="tt">'+esc(it.text)+'</div></div>').join("")+'</div>':"")
+    +'</div>';
 }
+window._boardOpen=window._boardOpen||{};
+window.toggleBoardRoutine=rid=>{ window._boardOpen[rid]=!window._boardOpen[rid]; renderBoard(); };
 function renderBoard(){
   const el=$("board-cols"); if(!el) return;
   el.style.gridTemplateColumns="";
