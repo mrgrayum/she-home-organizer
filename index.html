@@ -603,7 +603,7 @@ function openModalForNew(preset){
     +'<div style="width:110px"><label>Minutes</label><input id="f-min" type="number" min="0" value="'+(c.minutes||"")+'"></div></div>'
     +'<div id="f-cadrow"><label>How often</label><select id="f-cad"><option value="daily"'+(c.cadence==="daily"?" selected":"")+'>Daily</option><option value="weekly"'+(c.cadence==="weekly"?" selected":"")+'>Weekly</option><option value="monthly"'+(c.cadence==="monthly"?" selected":"")+'>Monthly</option><option value="once"'+(c.cadence==="once"?" selected":"")+'>One-time</option></select></div>'
     +'<div id="f-dayrow"><label>Day of week (for Basic Week / weekly)</label><select id="f-day"><option value="">—</option>'+DAY_KEYS.map(k2=>'<option value="'+k2+'"'+(c.day===k2?" selected":"")+'>'+DAY_NAMES[k2]+'</option>').join("")+'</select></div>'
-    +'<label>Do by (one-time tasks)</label><input id="f-due" type="date" value="'+esc(c.dueDate||"")+'">'
+    +'<div id="f-duerow"><label>Do by (one-time tasks)</label><input id="f-due" type="date" value="'+esc(c.dueDate||"")+'"></div>'
     +'<label>Notes</label><textarea id="f-notes" rows="2">'+esc(c.notes||"")+'</textarea>'
     +'<div class="btnrow"><button class="btn" onclick="saveCardForm(\'\')">Save card</button><button class="btn ghost" onclick="closeModal()">Cancel</button></div>');
   todoMode($("f-cat").value==="todo");
