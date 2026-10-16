@@ -337,7 +337,7 @@ if(!FIREBASE_READY){
   }).finally(startAuth);
   function startAuth(){
     firebase.auth().onAuthStateChanged(user=>{
-      if(user){ const changed=!U||U.uid!==user.uid; U=user; if(changed) resetLocalState(); $("welcome-screen").classList.add("hidden"); boot(); }
+      if(user){ const changed=!U||U.uid!==user.uid; U=user; if(changed) resetLocalState(); $("welcome-screen").classList.add("hidden"); renderAccount(); boot(); }
       else { U=null; resetLocalState(); $("app").classList.add("hidden"); $("welcome-screen").classList.remove("hidden"); }
     });
   }
@@ -1021,10 +1021,10 @@ async function boot(){
   $("setup-screen").classList.add("hidden");
   $("app").classList.remove("hidden");
   $("date-line").textContent=new Date().toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric"});
+  listenAll(); renderAccount();
   await seedIfNeeded().catch(e=>console.warn("seed",e));
   await migrateRoutineCards().catch(e=>console.warn("migrate",e));
   await migrateTodoCards().catch(e=>console.warn("migrate",e));
-  listenAll(); renderAccount();
 }
 async function migrateTodoCards(){
   const s=await col("cards").where("category","==","todo").get().catch(()=>null);
