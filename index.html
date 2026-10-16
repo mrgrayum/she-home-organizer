@@ -51,6 +51,14 @@ label{font-size:.85rem; font-weight:600; color:var(--ink-soft); display:block; m
 .addbar{position:sticky; bottom:calc(76px + env(safe-area-inset-bottom)); z-index:15; max-width:640px; margin:0 auto; padding:.4rem 1rem;}
 .addbar .btn{width:100%; font-size:1.05rem; padding:.85rem;}
 #view-today{padding-bottom:calc(96px + env(safe-area-inset-bottom));}
+#view-today{padding-bottom:calc(96px + env(safe-area-inset-bottom));}
+#today-header{position:sticky;top:0;z-index:25;background:var(--paper);margin:0 -1rem;padding:.55rem 1rem .6rem;border-bottom:1px solid var(--line);}
+.th-row{display:flex;justify-content:space-between;align-items:center;gap:.5rem;}
+.th-kicker{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--terra-dark);}
+#th-sub{margin-top:.1rem;}
+#th-pct{font-size:1.5rem;font-weight:800;color:var(--ink);}
+.th-bar{height:8px;border-radius:99px;background:#e7dcc8;margin-top:.45rem;overflow:hidden;}
+#th-fill{height:100%;width:0%;border-radius:99px;background:var(--sage);transition:width .4s ease;}
 .tabs{position:fixed; bottom:0; left:0; right:0; z-index:30; display:flex;
   background:#fffdf8; border-top:1px solid var(--line);
   padding:.4rem .2rem calc(.4rem + env(safe-area-inset-bottom));}
@@ -125,24 +133,15 @@ code.cfg{background:#f1e9d8; padding:.15rem .4rem; border-radius:6px; font-size:
 
     <!-- TODAY -->
     <section id="view-today" class="view active">
-      <div class="kicker">Up next</div>
-      <div id="focus-slot"></div>
-      <div class="kicker">On deck <span id="ondeck-count" class="progress-note"></span></div>
-      <div id="ondeck-list" class="card"></div>
-      <div class="card">
-        <div class="ringwrap">
-          <svg class="ring" viewBox="0 0 100 100">
-            <circle class="bg" cx="50" cy="50" r="42" fill="none" stroke-width="10"/>
-            <circle class="fg" id="ring-fg" cx="50" cy="50" r="42" fill="none" stroke-width="10"
-              stroke-dasharray="263.9" stroke-dashoffset="263.9" transform="rotate(-90 50 50)"/>
-            <text x="50" y="56" text-anchor="middle" id="ring-text">0%</text>
-          </svg>
-          <div>
-            <div id="minutes-line" style="font-weight:700;"></div>
-            <div class="progress-note" id="encourage-line"></div>
-          </div>
+            <div id="today-header">
+        <div class="th-row">
+          <div><div class="th-kicker">Today</div><div id="th-sub" class="progress-note"></div></div>
+          <div id="th-pct">0%</div>
         </div>
+        <div class="th-bar"><div id="th-fill"></div></div>
       </div>
+      <div class="kicker">Today's cards <span id="ondeck-count" class="progress-note"></span></div>
+      <div id="ondeck-list" class="card"></div>
       <div class="kicker">Routines today</div>
       <div id="routines-today"></div>
       <div class="addbar"><button class="btn" id="add-today-btn">＋ Add a to-do</button></div>
@@ -405,34 +404,21 @@ window.lpEnd=()=>{ if(_lpTimer){ clearTimeout(_lpTimer); _lpTimer=null; } };
 window.rowEdit=id=>{ if(Date.now()<_lpSkipUntil) return; openCardEdit(id); };
 window.openCardEdit=id=>{ const c=cards.find(x=>x.id===id); if(c) editCard(id); };
 function renderToday(){
-  const deck=onDeck(), focus=deck[0], all=dayCards();
-  const fs=$("focus-slot");
-  if(!focus){
-    fs.innerHTML='<div class="card"><h3>All clear! 🎉</h3><p class="progress-note">The deck is empty. Enjoy the rest of your day — or pull a card from the box if you\'re feeling ambitious.</p><div class="btnrow"><button class="btn secondary small" onclick="goView(\'cards\')">Browse the card box</button></div></div>';
-  }else{
-    fs.innerHTML='<div class="card focus" onmousedown="lpStart(\''+focus.id+'\')" onmouseup="lpEnd()" onmouseleave="lpEnd()" ontouchstart="lpStart(\''+focus.id+'\')" ontouchend="lpEnd()" ontouchmove="lpEnd()" oncontextmenu="return false"><div class="kicker" style="margin-top:0">Up next</div>'
-      +pillFor(focus)+'<h2 style="margin:.3rem 0" onclick="rowEdit(\''+focus.id+'\')">'+esc(focus.title)+'</h2>'
-      +'<div class="meta">'+esc(cardMeta(focus))+'</div>'
-      +(focus.notes?'<p>'+esc(focus.notes)+'</p>':"")
-      +'<div class="btnrow" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()"><button class="btn" onclick="doDone(\''+focus.id+'\')">✓ Done</button>'
-      +'<button class="btn secondary" onclick="doRefile(\''+focus.id+'\')"">'+(focus.category==="todo"?"Park ⏸":"Refile ↪")+'</button></div></div>';
-  }
-  $("ondeck-count").textContent = deck.length? "("+deck.length+" card"+(deck.length>1?"s":"")+")":"";
-  const rest=deck.slice(1);
-  $("ondeck-list").innerHTML = rest.length
-    ? rest.map(c=>'<div class="taskrow" onmousedown="lpStart(\''+c.id+'\')" onmouseup="lpEnd()" onmouseleave="lpEnd()" ontouchstart="lpStart(\''+c.id+'\')" ontouchend="lpEnd()" ontouchmove="lpEnd()" oncontextmenu="return false">'
+  const deck=onDeck(), all=dayCards();
+  const total=all.reduce((s,c)=>s+(+c.minutes||0),0);
+  const doneCards=all.filter(isDoneToday);
+  const doneM=doneCards.reduce((s,c)=>s+(+c.minutes||0),0);
+  const pct=all.length?Math.round(doneCards.length/all.length*100):100;
+  $("th-pct").textContent=pct+"%";
+  $("th-sub").textContent=doneM+" of "+total+" minutes · "+doneCards.length+" of "+all.length+" cards";
+  $("th-fill").style.width=pct+"%";
+  $("ondeck-count").textContent=deck.length?"("+deck.length+")":"";
+  $("ondeck-list").innerHTML=deck.length
+    ? deck.map(c=>'<div class="taskrow" onmousedown="lpStart(\''+c.id+'\')" onmouseup="lpEnd()" onmouseleave="lpEnd()" ontouchstart="lpStart(\''+c.id+'\')" ontouchend="lpEnd()" ontouchmove="lpEnd()" oncontextmenu="return false">'
       +'<button class="check" onclick="doDone(\''+c.id+'\')" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()"></button>'
       +'<div class="tt" onclick="rowEdit(\''+c.id+'\')"><b>'+esc(c.title)+'</b><div class="progress-note">'+esc(cardMeta(c))+'</div></div>'
       +'<span class="minutes">'+(c.minutes?c.minutes+"m":"")+'</span></div>').join("")
-    : '<div class="empty">Nothing else on deck.</div>';
-  const total=all.reduce((s,c)=>s+(+c.minutes||0),0);
-  const doneM=all.filter(isDoneToday).reduce((s,c)=>s+(+c.minutes||0),0);
-  const pct=all.length?Math.round(all.filter(isDoneToday).length/all.length*100):100;
-  $("ring-fg").style.strokeDashoffset=(263.9*(1-pct/100)).toFixed(1);
-  $("ring-text").textContent=pct+"%";
-  $("minutes-line").textContent=doneM+" of "+total+" minutes";
-  const msgs=["Every card you finish is a gift to future-you. 💛","Slow and steady — the tortoise had a tidy house.","Done is better than perfect. Always.","Look at you go. The SHE would be proud."];
-  $("encourage-line").textContent=msgs[Math.min(all.filter(isDoneToday).length,3)];
+    : '<div class="empty" style="padding:1.2rem;text-align:center"><h3 style="margin:.2rem 0">All clear! 🎉</h3><p class="progress-note">The deck is empty. Enjoy the rest of your day — or pull a card from the box if you\'re feeling ambitious.</p><div class="btnrow" style="justify-content:center"><button class="btn secondary small" onclick="goView(\'cards\')">Browse the card box</button></div></div>';
   // routines snapshot
   const rids=Object.keys(routines);
   $("routines-today").innerHTML = rids.length ? rids.map(rid=>{
@@ -522,7 +508,7 @@ window.editCard=id=>{
     +'<div id="f-daywrap"><label>Day of week (for Basic Week / weekly)</label><select id="f-day"><option value="">—</option>'+DAY_KEYS.map(k=>'<option value="'+k+'"'+(c.day===k?" selected":"")+'>'+DAY_NAMES[k]+'</option>').join("")+'</select></div>'
     +'<div id="f-duewrap"><label>Do by (one-time tasks)</label><input id="f-due" type="date" value="'+esc(c.dueDate||"")+'"></div>'
     +'<label>Notes</label><textarea id="f-notes" rows="2">'+esc(c.notes||"")+'</textarea>'
-    +'<div class="btnrow"><button class="btn" onclick="saveCardForm(\''+(c.id||"")+'\')">Save card</button>'
+    +'<div class="btnrow"><button class="btn" onclick="saveCardForm(\''+(c.id||"")+'\')">Save card</button>'+(c.id?'<button class="btn secondary" onclick="doRefile(\''+c.id+'\')">Refile</button>':"")+'
     +(c.id?'<button class="btn ghost" onclick="delCard(\''+c.id+'\')">Delete</button>':"")
     +'<button class="btn ghost" onclick="closeModal()">Cancel</button></div>');
 };
