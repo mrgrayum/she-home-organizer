@@ -503,8 +503,8 @@ function renderRoutines(){
         +'<button class="check'+(checks.includes(it.id)?" done":"")+'" onclick="togRoutine(\''+rid+'\',\''+it.id+'\')">'+(checks.includes(it.id)?"✓":"")+'</button>'
         +'<div class="tt">'+esc(it.text)+'</div></div>').join("")
       +'<div class="btnrow"><button class="btn secondary small" onclick="addRoutineItem(\''+rid+'\')">＋ Add a step</button></div></div>';
-  }).join("") : '<div class="card"><div class="empty">No routines yet.</div><div class="btnrow"><button class="btn" onclick="addRoutine()">＋ Create a routine</button></div></div>'
-  + (rids.length? '<div class="addbar"><button class="btn" onclick="addRoutine()">＋ New routine</button></div>':"");
+  }).join("") : '<div class="card"><div class="empty">No routines yet.</div><div class="btnrow"><button class="btn" onclick="addRoutine()">＋ Create a routine</button></div></div>')
+  + (rids.length ? '<div class="addbar"><button class="btn" onclick="addRoutine()">＋ New routine</button></div>':"");
 }
 window.togRoutine=(rid,iid)=>toggleRoutineItem(rid,iid).then(render).catch(e=>toast("Couldn't save — check connection."));
 window.addRoutineItem=rid=>{
@@ -521,8 +521,10 @@ window.editRoutine=rid=>{
   const r=routines[rid];
   openModal('<h2>Edit routine</h2><label>Routine name</label><input id="f-rname" value="'+esc(r.title)+'">'
     +'<label>Steps (one per line — unchecked order is kept)</label><textarea id="f-ritems" rows="6">'+esc(r.items.map(i=>i.text).join("\n"))+'</textarea>'
-    +'<div class="btnrow"><button class="btn" onclick="saveRoutineEdit(\''+rid+'\')">Save</button><button class="btn ghost" onclick="closeModal()">Cancel</button></div>');
+    +'<div class="btnrow"><button class="btn" onclick="saveRoutineEdit(\''+rid+'\')">Save</button><button class="btn ghost" style="color:var(--danger);border-color:var(--danger);" onclick="delRoutine(\''+rid+\)">Delete</button><button class="btn ghost" onclick="closeModal()">Cancel</button></div>');
 };
+window.delRoutine=rid=>{ openModal('<h2>Delete this routine?</h2><p class="progress-note">Its steps and history go with it. This can\'t be undone.</p><div class="btnrow"><button class="btn" style="background:var(--danger);" onclick="doDelRoutine(\''+rid+\)">Delete</button><button class="btn ghost" onclick="closeModal()">Cancel</button></div>'); };
+window.doDelRoutine=async rid=>{ closeModal(); await col("routines").doc(rid).delete().catch(e=>toast("Couldn\'t delete — check connection.")); toast("Routine deleted."); render(); };
 window.saveRoutineEdit=async rid=>{
   const name=$("f-rname").value.trim()||routines[rid].title;
   const old=routines[rid].items;
