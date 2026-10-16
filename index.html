@@ -144,6 +144,21 @@ code.cfg{background:#f1e9d8; padding:.15rem .4rem; border-radius:6px; font-size:
   </div>
 </div>
 
+<div id="welcome-screen" class="setup-screen hidden">
+  <div class="card">
+    <h2>🗂️ Grayum Home Task Organizer</h2>
+    <p class="progress-note">One shared home for the whole family — sign in and everyone’s lists stay in sync on every device.</p>
+    <div style="display:flex;flex-direction:column;gap:.5rem;margin:.6rem 0">
+      <input id="w-email" type="email" placeholder="Family email" autocomplete="email">
+      <input id="w-pass" type="password" placeholder="Password" autocomplete="current-password">
+    </div>
+    <div class="progress-note" id="w-err" style="color:var(--danger)"></div>
+    <div class="btnrow"><button class="btn" onclick="familySignIn()">Sign in</button></div>
+    <div class="btnrow"><button class="btn ghost" onclick="continueGuest()">Continue without an account</button></div>
+    <p class="progress-note">Without an account, your lists stay on this device only.</p>
+  </div>
+</div>
+
 <div id="app" class="hidden">
   <div class="topbar">
     <h1>🗂️ Grayum Home Task Organizer</h1>
@@ -227,6 +242,11 @@ code.cfg{background:#f1e9d8; padding:.15rem .4rem; border-radius:6px; font-size:
           <input id="fam-name" placeholder="Name" style="flex:1" maxlength="30">
           <button class="btn small" onclick="addFamMember()">＋ Add</button>
         </div>
+      </div>
+      <div class="card">
+        <h3>Family account</h3>
+        <p class="progress-note">One login for the whole household — sign every device into it and everyone shares the same lists.</p>
+        <div id="account-box"></div>
       </div>
       <div class="card">
         <h3>Backup — your safety net</h3>
@@ -313,14 +333,60 @@ if(!FIREBASE_READY){
   }).finally(startAuth);
   function startAuth(){
     firebase.auth().onAuthStateChanged(user=>{
-      if(user){ U=user; boot(); }
-      else firebase.auth().signInAnonymously().catch(e=>{
-        document.body.innerHTML='<div class="setup-screen"><div class="card"><h2>Couldn\'t sign in</h2><p>Anonymous sign-in needs to be enabled: Firebase console → Build → Authentication → Sign-in method → enable <b>Anonymous</b>. Then reload.</p></div></div>';
-      });
+      if(user){ U=user; $("welcome-screen").classList.add("hidden"); boot(); }
+      else { unsubs.forEach(u=>u()); unsubs=[]; $("app").classList.add("hidden"); $("welcome-screen").classList.remove("hidden"); }
     });
   }
 }
 
+    function friendlyAuthErr(e){
+      const c=(e&&e.code)||"";
+      if(c==="auth/operation-not-allowed") return "Email sign-in isn't turned on yet — enable it in the Firebase console, then try again.";
+      if(c==="auth/user-not-found") return "No family login with that email yet — create it first in Settings on the device that has your lists.";
+      if(c==="auth/wrong-password"||c==="auth/invalid-credential") return "Email or password didn't match.";
+      if(c==="auth/email-already-in-use") return "That email already has a login — sign in instead.";
+      if(c==="auth/weak-password") return "Password needs to be at least 6 characters.";
+      if(c==="auth/invalid-email") return "That email doesn't look right.";
+      if(c==="auth/too-many-requests") return "Too many tries — wait a bit and try again.";
+      return "Couldn't sign in ("+c+").";
+    }
+    window.familySignIn=()=>{
+      const em=$("w-email").value.trim(), pw=$("w-pass").value;
+      $("w-err").textContent=!em?"Enter the family email.":(!pw?"Enter the password.":"");
+      if(!em||!pw) return;
+      firebase.auth().signInWithEmailAndPassword(em,pw).catch(e=>{ $("w-err").textContent=friendlyAuthErr(e); });
+    };
+    window.continueGuest=()=>{
+      firebase.auth().signInAnonymously().catch(e=>{ $("w-err").textContent="Couldn't start — check your connection and reload."; });
+    };
+    window.createFamilyLogin=()=>{
+      const em=$("ac-email").value.trim(), pw=$("ac-pass").value;
+      $("ac-err").textContent=!em?"Enter an email.":(pw.length<6?"Password needs at least 6 characters.":"");
+      if(!em||pw.length<6) return;
+      U.linkWithCredential(firebase.auth.EmailAuthProvider.credential(em,pw))
+        .then(()=>{ toast("Family login created 🎉"); renderAccount(); })
+        .catch(e=>{ $("ac-err").textContent=friendlyAuthErr(e); });
+    };
+    window.joinFamilyLogin=()=>{
+      if(!confirm("Switch this device to the family login? Anything saved only on this device will stay behind.")) return;
+      firebase.auth().signOut();
+    };
+    window.familySignOut=()=>{ if(confirm("Sign out of the family account on this device?")) firebase.auth().signOut(); };
+    function renderAccount(){
+      const el=$("account-box"); if(!el||!U) return;
+      if(U.isAnonymous){
+        el.innerHTML='<p class="progress-note"><b>This device only</b> — lists live just here.</p>'
+          +'<div style="display:flex;gap:.5rem;margin:.45rem 0;flex-wrap:wrap"><input id="ac-email" type="email" placeholder="Family email" style="flex:1;min-width:140px" autocomplete="email"><input id="ac-pass" type="password" placeholder="Password (6+ chars)" style="flex:1;min-width:140px" autocomplete="new-password"></div>'
+          +'<div class="progress-note" id="ac-err" style="color:var(--danger)"></div>'
+          +'<div class="btnrow"><button class="btn small" onclick="createFamilyLogin()">Create family login</button>'
+          +'<button class="btn secondary small" onclick="joinFamilyLogin()">Join existing login</button></div>'
+          +'<p class="progress-note">Create the login on the device that has everything — its lists become the shared ones. Then sign in with the same email + password on every other device.</p>';
+      } else {
+        el.innerHTML='<p>Shared account: <b>'+esc(U.email)+'</b> ✓</p>'
+          +'<div class="btnrow"><button class="btn secondary small" onclick="familySignOut()">Sign out</button></div>'
+          +'<p class="progress-note">Every device signed in here shares the same lists — updates show up everywhere.</p>';
+      }
+    }
 /* ---------------- data layer ---------------- */
 let cards=[], routines={}, dayDoc=null, settingsDoc=null, currentCat="all";
 let orderMode=false, routineOrderMode=false;
@@ -896,7 +962,7 @@ function render(){
   if(renderQueued) return; renderQueued=true;
   requestAnimationFrame(()=>{ renderQueued=false;
     try{
-      renderToday(); renderCardBox(); renderRoutines(); renderWeek(); renderFamily(); renderWhoChips(); renderBoard();
+      renderToday(); renderCardBox(); renderRoutines(); renderWeek(); renderFamily(); renderWhoChips(); renderBoard(); renderAccount();
       const active=document.querySelector("#tabs button.active");
       if(active&&active.dataset.view==="progress") renderProgress();
     }catch(e){ console.warn("render",e); }
