@@ -390,11 +390,11 @@ function whoVisible(who){
 }
 window.toggleWho=id=>{
   if(id==="__all"){ selWho=null; }
+  else if(!selWho){ selWho=[id]; }
   else{
-    let s = selWho ? selWho.slice() : fam().map(m=>m.id);
-    const i=s.indexOf(id);
-    if(i>=0) s.splice(i,1); else s.push(id);
-    selWho = (!s.length || s.length>=fam().length) ? null : s;
+    const i=selWho.indexOf(id);
+    if(i>=0){ const s=selWho.slice(); s.splice(i,1); selWho=s.length?s:null; }
+    else{ selWho=selWho.concat(id); }
   }
   render();
 };
