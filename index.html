@@ -64,8 +64,15 @@ label{font-size:.85rem; font-weight:600; color:var(--ink-soft); display:block; m
 .who-chip{flex:none;display:inline-flex;align-items:center;gap:.32rem;padding:.32rem .7rem;border-radius:99px;border:1.5px solid var(--line);background:var(--card);font-size:.8rem;font-weight:600;color:var(--ink-soft);min-height:38px;}
 .who-chip.on{background:var(--ink);color:#fff;border-color:var(--ink);}
 #board-cols{display:flex;gap:.7rem;overflow-x:auto;padding:.2rem .1rem .8rem;scroll-snap-type:x proximity;}
-.bcol{flex:0 0 80%;max-width:340px;scroll-snap-align:start;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:.7rem;box-shadow:var(--shadow);}
-@media(min-width:760px){.bcol{flex:1 1 0;max-width:none;}}
+.bcol{flex:0 0 88%;max-width:380px;scroll-snap-align:start;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:.7rem;box-shadow:var(--shadow);}
+.bcol .taskrow{padding:.5rem .55rem;gap:.55rem;}
+.bcol .tt b{font-size:.93rem;}
+.bcol .check{width:32px;height:32px;flex-basis:32px;}
+@media(min-width:760px){
+  .wrap.wide{max-width:1560px;}
+  #board-cols{display:grid;gap:.8rem;scroll-snap-type:none;}
+  .bcol{max-width:none;}
+}
 .bcol-head{display:flex;align-items:center;gap:.45rem;margin-bottom:.35rem;}
 .bcol-head .progress-note{margin-left:auto;}
 .bcol-bar{height:6px;border-radius:99px;background:var(--line);margin-bottom:.4rem;overflow:hidden;}
@@ -739,11 +746,13 @@ function boardRoutine(rid){
 }
 function renderBoard(){
   const el=$("board-cols"); if(!el) return;
+  el.style.gridTemplateColumns="";
   const list=fam();
   if(!list.length){
     el.innerHTML='<div class="card"><div class="empty"><h3 style="margin:.2rem 0">No board yet</h3><p class="progress-note">Add family members in Settings \u2192 Family and each person gets their own column here.</p><div class="btnrow"><button class="btn small" onclick="goView(\'settings\')">Go to Settings</button></div></div></div>';
     return;
   }
+  el.style.gridTemplateColumns="repeat("+list.length+", minmax(210px, 1fr))";
   el.innerHTML=list.map(m=>{
     const mine=w=>!w||w===m.id;
     const all=dayCards().filter(c=>mine(c.who));
@@ -869,6 +878,7 @@ window.goView=name=>{
   document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("active",b.dataset.view===name));
   document.querySelectorAll(".view").forEach(v=>v.classList.toggle("active",v.id==="view-"+name));
   if(name==="progress") renderProgress();
+  document.querySelector(".wrap").classList.toggle("wide",name==="board");
   window.scrollTo(0,0);
 };
 document.querySelectorAll("#tabs button").forEach(b=>b.addEventListener("click",()=>goView(b.dataset.view)));
