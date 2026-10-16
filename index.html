@@ -298,7 +298,7 @@ async function saveCard(card){
   if(card.id) await col("cards").doc(card.id).set(data,{merge:true});
   else await col("cards").add(Object.assign({active:true,createdAt:firebase.firestore.FieldValue.serverTimestamp()},data));
 }
-async function deleteCard(id){ if(confirm("Delete this card?")) await col("cards").doc(id).delete(); }
+
 async function markDone(id){
   const t=todayStr();
   await dayRef().set({done:Object.assign({},(dayDoc&&dayDoc.done)||{},{[id]:true})},{merge:true});
@@ -494,7 +494,10 @@ window.saveCardForm=async id=>{
   await saveCard(card).catch(e=>toast("Couldn't save — check connection."));
   toast("Card filed. 🗂️");
 };
-window.delCard=id=>{ closeModal(); deleteCard(id).then(render); };
+window.delCard=id=>{ openModal('<h2>Delete this card?</h2><p class="progress-note">This can\'t be undone.</p>'+
+'<div class="btnrow"><button class="btn" style="background:var(--danger);" onclick="doDelCard(\''+id+'\')">Delete</button>'+
+'<button class="btn ghost" onclick="closeModal()">Cancel</button></div>'); };
+window.doDelCard=async id=>{ closeModal(); await col("cards").doc(id).delete().catch(e=>toast("Couldn\'t delete \u2014 check connection.")); toast("Card deleted."); render(); };
 
 /* ---------------- ROUTINES ---------------- */
 function renderRoutines(){
