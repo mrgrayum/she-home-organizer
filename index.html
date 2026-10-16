@@ -58,7 +58,8 @@ label{font-size:.85rem; font-weight:600; color:var(--ink-soft); display:block; m
 .tabs button .ico{font-size:1.25rem;}
 .tabs button.active{color:var(--terra-dark);}
 .view{display:none;} .view.active{display:block;}
-.taskrow{display:flex; align-items:center; gap:.7rem; padding:.65rem .2rem; border-bottom:1px dashed var(--line);}
+.taskrow{display:flex; align-items:center; gap:.7rem; padding:.65rem .2rem; border-bottom:1px dashed var(--line); -webkit-touch-callout:none; user-select:none;}
+.taskrow .tt{cursor:pointer;} .card.focus h2{cursor:pointer;}
 .taskrow:last-child{border-bottom:none;}
 .check{width:26px; height:26px; border-radius:50%; border:2px solid var(--sage); background:#fff; flex:none;
   display:flex; align-items:center; justify-content:center; font-size:1rem; color:#fff; padding:0;}
@@ -153,7 +154,7 @@ code.cfg{background:#f1e9d8; padding:.15rem .4rem; border-radius:6px; font-size:
       <div class="catbar" id="catbar"></div>
       <div id="cardbox-list"></div>
       <div class="addbar"><button class="btn" id="add-card-btn">＋ Add a card</button></div>
-      <div class="addbar" id="todo-hint" style="display:none"><span class="progress-note">To-dos are quick-captured from the <b>Today</b> tab \-\ they live on your deck until done.</span></div>
+      
     </section>
 
     <!-- ROUTINES -->
@@ -365,10 +366,10 @@ async function seedIfNeeded(){
 /* ---------------- derived state ---------------- */
 function doneMap(){ return (dayDoc&&dayDoc.done)||{}; }
 function isDoneToday(c){ return !!doneMap()[c.id]; }
-function onDeck(){
+function dayCards(){
   const t=todayStr(), wd=DAY_KEYS[new Date().getDay()], dom=new Date().getDate();
   return cards.filter(c=>{
-    if(!c.active || isDoneToday(c) || c.category==="routine") return false;
+    if(!c.active || c.category==="routine") return false;
     if(c.category==="todo"){ if(c.refileUntil && c.refileUntil>t) return false; return !c.doneEver; }
     if(c.refileUntil && c.refileUntil>t) return false;
     if(c.refileUntil && c.refileUntil<=t) return !c.doneEver;
@@ -379,6 +380,7 @@ function onDeck(){
     return false;
   }).sort((a,b)=>(a.minutes||0)-(b.minutes||0));
 }
+function onDeck(){ return dayCards().filter(c=>!isDoneToday(c)); }
 function cardMeta(c){
   const bits=[];
   if(c.room) bits.push(c.room);
@@ -394,35 +396,40 @@ function pillFor(c){
 }
 
 /* ---------------- TODAY ---------------- */
+let _lpTimer=null,_lpSkipUntil=0;
+window.lpStart=id=>{ if(_lpTimer) clearTimeout(_lpTimer); _lpTimer=setTimeout(()=>{ _lpTimer=null; _lpSkipUntil=Date.now()+800; openCardEdit(id); },550); };
+window.lpEnd=()=>{ if(_lpTimer){ clearTimeout(_lpTimer); _lpTimer=null; } };
+window.rowEdit=id=>{ if(Date.now()<_lpSkipUntil) return; openCardEdit(id); };
+window.openCardEdit=id=>{ const c=cards.find(x=>x.id===id); if(c) editCard(id); };
 function renderToday(){
-  const deck=onDeck(), focus=deck[0];
+  const deck=onDeck(), focus=deck[0], all=dayCards();
   const fs=$("focus-slot");
   if(!focus){
     fs.innerHTML='<div class="card"><h3>All clear! 🎉</h3><p class="progress-note">The deck is empty. Enjoy the rest of your day — or pull a card from the box if you\'re feeling ambitious.</p><div class="btnrow"><button class="btn secondary small" onclick="goView(\'cards\')">Browse the card box</button></div></div>';
   }else{
-    fs.innerHTML='<div class="card focus"><div class="kicker" style="margin-top:0">Up next</div>'
-      +pillFor(focus)+'<h2 style="margin:.3rem 0">'+esc(focus.title)+'</h2>'
+    fs.innerHTML='<div class="card focus" onmousedown="lpStart(\''+focus.id+'\')" onmouseup="lpEnd()" onmouseleave="lpEnd()" ontouchstart="lpStart(\''+focus.id+'\')" ontouchend="lpEnd()" ontouchmove="lpEnd()" oncontextmenu="return false"><div class="kicker" style="margin-top:0">Up next</div>'
+      +pillFor(focus)+'<h2 style="margin:.3rem 0" onclick="rowEdit(\''+focus.id+'\')">'+esc(focus.title)+'</h2>'
       +'<div class="meta">'+esc(cardMeta(focus))+'</div>'
       +(focus.notes?'<p>'+esc(focus.notes)+'</p>':"")
-      +'<div class="btnrow"><button class="btn" onclick="doDone(\''+focus.id+'\')">✓ Done</button>'
+      +'<div class="btnrow" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()"><button class="btn" onclick="doDone(\''+focus.id+'\')">✓ Done</button>'
       +'<button class="btn secondary" onclick="doRefile(\''+focus.id+'\')">Refile ↪</button></div></div>';
   }
   $("ondeck-count").textContent = deck.length? "("+deck.length+" card"+(deck.length>1?"s":"")+")":"";
   const rest=deck.slice(1);
   $("ondeck-list").innerHTML = rest.length
-    ? rest.map(c=>'<div class="taskrow'+(isDoneToday(c)?" done":"")+'">'
-      +'<button class="check'+(isDoneToday(c)?" done":"")+'" onclick="doDone(\''+c.id+'\')">'+(isDoneToday(c)?"✓":"")+'</button>'
-      +'<div class="tt"><b>'+esc(c.title)+'</b><div class="progress-note">'+esc(cardMeta(c))+'</div></div>'
-      +'<span class="minutes">'+(c.minutes?c.minutes+"m":"")+'</span>'+(c.category==="todo"?'<button class="iconbtn" onclick="editCard(\'+c.id+\')" title="Edit to-do">️</button>':"")+'</div>').join("")
+    ? rest.map(c=>'<div class="taskrow" onmousedown="lpStart(\''+c.id+'\')" onmouseup="lpEnd()" onmouseleave="lpEnd()" ontouchstart="lpStart(\''+c.id+'\')" ontouchend="lpEnd()" ontouchmove="lpEnd()" oncontextmenu="return false">'
+      +'<button class="check" onclick="doDone(\''+c.id+'\')" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()"></button>'
+      +'<div class="tt" onclick="rowEdit(\''+c.id+'\')"><b>'+esc(c.title)+'</b><div class="progress-note">'+esc(cardMeta(c))+'</div></div>'
+      +'<span class="minutes">'+(c.minutes?c.minutes+"m":"")+'</span></div>').join("")
     : '<div class="empty">Nothing else on deck.</div>';
-  const total=deck.reduce((s,c)=>s+(+c.minutes||0),0);
-  const doneM=deck.filter(isDoneToday).reduce((s,c)=>s+(+c.minutes||0),0);
-  const pct=deck.length?Math.round(deck.filter(isDoneToday).length/deck.length*100):100;
+  const total=all.reduce((s,c)=>s+(+c.minutes||0),0);
+  const doneM=all.filter(isDoneToday).reduce((s,c)=>s+(+c.minutes||0),0);
+  const pct=all.length?Math.round(all.filter(isDoneToday).length/all.length*100):100;
   $("ring-fg").style.strokeDashoffset=(263.9*(1-pct/100)).toFixed(1);
   $("ring-text").textContent=pct+"%";
   $("minutes-line").textContent=doneM+" of "+total+" minutes";
   const msgs=["Every card you finish is a gift to future-you. 💛","Slow and steady — the tortoise had a tidy house.","Done is better than perfect. Always.","Look at you go. The SHE would be proud."];
-  $("encourage-line").textContent=msgs[Math.min(deck.filter(isDoneToday).length,3)];
+  $("encourage-line").textContent=msgs[Math.min(all.filter(isDoneToday).length,3)];
   // routines snapshot
   const rids=Object.keys(routines);
   $("routines-today").innerHTML = rids.length ? rids.map(rid=>{
@@ -463,8 +470,8 @@ window.editTodo=id=>{
     +'<label>Title</label><input id="f-title" value="'+esc(c.title)+'">'
     +'<div style="width:120px"><label>Minutes</label><input id="f-min" type="number" min="0" value="'+(c.minutes||"")+'"></div>'
     +'<label>Notes</label><textarea id="f-notes" rows="2">'+esc(c.notes||"")+'</textarea>'
-    +'<div class="btnrow"><button class="btn" onclick="saveTodoEdit(\'+id+\')">Save</button>'
-    +'<button class="btn ghost" onclick="delCard(\'+id+\')">Delete</button>'
+    +'<div class="btnrow"><button class="btn" onclick="saveTodoEdit(\''+id+'\')">Save</button>'
+    +'<button class="btn ghost" onclick="delCard(\''+id+'\')">Delete</button>'
     +'<button class="btn ghost" onclick="closeModal()">Cancel</button></div>');
 };
 window.saveTodoEdit=async id=>{
@@ -475,15 +482,13 @@ window.saveTodoEdit=async id=>{
 window.todoMode=on=>{ ["f-cadrow","f-dayrow","f-duerow","f-daywrap","f-duerow"].forEach(id=>{ const el=$(id); if(el) el.style.display=on?"none":""; }); };
 /* ---------------- CARD BOX ---------------- */
 function renderCatbar(){
-  const cats=[["all","All"]].concat(Object.keys(CATS).map(k=>[k,CATS[k]]));
+  const cats=[["all","All"]].concat(Object.keys(CATS).filter(k=>k!=="todo").map(k=>[k,CATS[k]]));
   $("catbar").innerHTML=cats.map(([k,n])=>'<button class="'+(currentCat===k?"active":"")+'" onclick="setCat(\''+k+'\')">'+n+'</button>').join("");
 }
 window.setCat=k=>{ currentCat=k; render(); };
 function renderCardBox(){
   renderCatbar();
-  $("add-card-btn").style.display=currentCat==="todo"?"none":"";
-  $("todo-hint").style.display=currentCat==="todo"?"":"none";
-  const list=cards.filter(c=>currentCat==="all"||c.category===currentCat)
+  const list=cards.filter(c=>c.category!=="todo"&&(currentCat==="all"||c.category===currentCat))
     .sort((a,b)=>(a.category||"").localeCompare(b.category||"")||(a.title||"").localeCompare(b.title||""));
   $("cardbox-list").innerHTML = list.length ? list.map(c=>
     '<div class="card"><div class="row-between"><div>'+pillFor(c)+'<div style="font-weight:700;margin-top:.25rem">'+esc(c.title)+'</div>'
@@ -498,7 +503,7 @@ window.editCard=id=>{
   if(c.id&&c.category==="todo") return editTodo(id);
   openModal('<h2>'+(c.id?"Edit card":"New card")+'</h2>'
     +'<label>Title</label><input id="f-title" value="'+esc(c.title)+'" placeholder="e.g. Wipe the microwave">'
-    +'<label>Divider (category)</label><select id="f-cat" onchange="todoMode(this.value===\'todo\')">'+Object.keys(CATS).map(k=>'<option value="'+k+'"'+(c.category===k?" selected":"")+'>'+CATS[k]+'</option>').join("")+'</select>'
+    +'<label>Divider (category)</label><select id="f-cat" onchange="todoMode(this.value===\'todo\')">'+Object.keys(CATS).filter(k=>k!=="todo").map(k=>'<option value="'+k+'"'+(c.category===k?" selected":"")+'>'+CATS[k]+'</option>').join("")+'</select>'
     +'<div class="row-between"><div style="flex:1"><label>Room / zone</label><input id="f-room" value="'+esc(c.room||"")+'" placeholder="Kitchen"></div>'
     +'<div style="width:110px"><label>Minutes</label><input id="f-min" type="number" min="0" value="'+(c.minutes||"")+'"></div></div>'
     +'<div id="f-cadrow"><label>How often</label><select id="f-cad"><option value="daily"'+(c.cadence==="daily"?" selected":"")+'>Daily</option><option value="weekly"'+(c.cadence==="weekly"?" selected":"")+'>Weekly</option><option value="monthly"'+(c.cadence==="monthly"?" selected":"")+'>Monthly</option><option value="once"'+(c.cadence==="once"?" selected":"")+'>One-time</option></select></div>'
@@ -598,7 +603,7 @@ function openModalForNew(preset){
   const c=Object.assign({title:"",category:defCat,room:"",minutes:15,cadence:"once",notes:"",day:null,dueDate:"",active:true},preset||{});
   openModal('<h2>New card</h2>'
     +'<label>Title</label><input id="f-title" value="'+esc(c.title)+'" placeholder="e.g. Wipe the microwave">'
-    +'<label>Divider (category)</label><select id="f-cat" onchange="todoMode(this.value===\'todo\')">'+Object.keys(CATS).map(k2=>'<option value="'+k2+'"'+(c.category===k2?" selected":"")+'>'+CATS[k2]+'</option>').join("")+'</select>'
+    +'<label>Divider (category)</label><select id="f-cat" onchange="todoMode(this.value===\'todo\')">'+Object.keys(CATS).filter(k2=>k2!=="todo").map(k2=>'<option value="'+k2+'"'+(c.category===k2?" selected":"")+'>'+CATS[k2]+'</option>').join("")+'</select>'
     +'<div class="row-between"><div style="flex:1"><label>Room / zone</label><input id="f-room" value="'+esc(c.room||"")+'" placeholder="Kitchen"></div>'
     +'<div style="width:110px"><label>Minutes</label><input id="f-min" type="number" min="0" value="'+(c.minutes||"")+'"></div></div>'
     +'<div id="f-cadrow"><label>How often</label><select id="f-cad"><option value="daily"'+(c.cadence==="daily"?" selected":"")+'>Daily</option><option value="weekly"'+(c.cadence==="weekly"?" selected":"")+'>Weekly</option><option value="monthly"'+(c.cadence==="monthly"?" selected":"")+'>Monthly</option><option value="once"'+(c.cadence==="once"?" selected":"")+'>One-time</option></select></div>'
