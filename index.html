@@ -313,7 +313,7 @@ const FIREBASE_READY = FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey.indexOf(
 const $ = id => document.getElementById(id);
 const DAY_KEYS = ["sun","mon","tue","wed","thu","fri","sat"];
 const DAY_NAMES = {sun:"Sunday",mon:"Monday",tue:"Tuesday",wed:"Wednesday",thu:"Thursday",fri:"Friday",sat:"Saturday"};
-const CATS = {basicweek:"Basic Week", monthly:"Monthly", zones:"Zones", menus:"Menus", todo:"To Do"};
+const CATS = {basicweek:"Basic Week", day:"Day", monthly:"Monthly", zones:"Zones", menus:"Menus", todo:"To Do"};
 function todayStr(d){ d=d||new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 function addDaysStr(base,n){ const d=new Date(base+"T12:00:00"); d.setDate(d.getDate()+n); return todayStr(d); }
 function fmtDay(ds){ try{ return new Date(ds+"T12:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"}); }catch(e){ return ds; } }
@@ -572,21 +572,29 @@ function dayCards(){
     if(c.refileUntil && c.refileUntil>t) return false;
     if(c.refileUntil && c.refileUntil<=t) return !c.doneEver || isDoneToday(c);
     if(c.cadence==="daily") return true;
-    if(c.day===wd) return true;
-    if(c.cadence==="monthly" && dom===1) return true;
+    if(c.category==="zones" && c.monthWeek) return Math.ceil(dom/7)===+c.monthWeek;
+    if(c.cadence==="monthly" && c.day && c.monthWeek) return c.day===wd && ordinalMatch(dom,+c.monthWeek);
+    if(c.day===wd && c.cadence!=="monthly") return true;
+    if(c.cadence==="monthly") return dom===1;
     if(c.cadence==="once" && c.dueDate && c.dueDate<=t && (!c.doneEver || isDoneToday(c))) return true;
     return false;
   }).sort((a,b)=>(cardOrderPos(a.id)-cardOrderPos(b.id))||((a.minutes||0)-(b.minutes||0)));
 }
+
 function onDeck(){ return dayCards().filter(c=>!isDoneToday(c)); }
 function cardMeta(c){
   const bits=[];
   if(c.room) bits.push(c.room);
   bits.push(CATS[c.category]||c.category);
-  if(c.cadence==="once") bits.push("One-time"); else bits.push(c.cadence[0].toUpperCase()+c.cadence.slice(1));
+  if(c.category==="day" && c.dueDate) bits.push(fmtDay(c.dueDate));
+  else if(c.category==="monthly" && c.day && c.monthWeek) bits.push(["","1st","2nd","3rd","4th","5th / last"][+c.monthWeek]+" "+DAY_NAMES[c.day]);
+  else if(c.category==="zones" && c.monthWeek) bits.push("Week "+(+c.monthWeek)+" of the month");
+  else if(c.cadence==="once") bits.push("One-time");
+  else if(c.cadence) bits.push(c.cadence[0].toUpperCase()+c.cadence.slice(1));
   if(c.minutes) bits.push(c.minutes+" min");
   return bits.join(" · ");
 }
+
 function pillFor(c){
   if(c.category==="basicweek") return '<span class="pill">Week</span>';
   if(c.category==="todo") return '<span class="pill gold">To do</span>';
@@ -708,6 +716,24 @@ window.saveTodoEdit=async id=>{
   await saveCard({id:id,title:t,category:"todo",minutes:+$("f-min").value||0,notes:$("f-notes").value.trim(),who:(($("f-ewho")&&$("f-ewho").value)||null),cadence:"once",day:null,dueDate:""}).catch(e=>toast("Couldn\'t save \-\ check connection."));
 };
 window.todoMode=on=>{ ["f-cadrow","f-dayrow","f-duerow","f-daywrap","f-duerow"].forEach(id=>{ const el=$(id); if(el) el.style.display=on?"none":""; }); };
+window.catMode=cat=>{
+  const show=(id,on)=>{ const el=$(id); if(el) el.style.display=on?"":"none"; };
+  const lbl=(id,txt)=>{ const el=$(id); if(el) el.textContent=txt; };
+  show("f-dayrow", cat==="basicweek"||cat==="monthly");
+  show("f-ordrow", cat==="monthly"||cat==="zones");
+  show("f-duerow", cat==="day");
+  lbl("f-daylabel","Day of week");
+  lbl("f-ordlabel", cat==="zones" ? "Week of the month" : "Which week");
+};
+function ordinalMatch(dom,n){
+  const occ=Math.ceil(dom/7);
+  if(occ===n) return true;
+  if(n>=5&&occ===4){
+    const now=new Date(), dim=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
+    return dom+7>dim;
+  }
+  return false;
+}
 /* ---------------- CARD BOX ---------------- */
 function renderCatbar(){
   const cats=[["all","All"]].concat(Object.keys(CATS).filter(k=>k!=="todo").map(k=>[k,CATS[k]]));
@@ -727,35 +753,47 @@ function renderCardBox(){
   ).join("") : '<div class="card"><div class="empty">No cards in this divider yet. Add one below!</div></div>';
 }
 window.editCard=id=>{
-  const c=cards.find(x=>x.id===id)||{title:"",category:currentCat==="all"?"todo":currentCat,room:"",minutes:15,cadence:"once",notes:"",day:null,dueDate:"",active:true};
+  const c=cards.find(x=>x.id===id)||{title:"",category:currentCat==="all"?"todo":currentCat,room:"",minutes:15,cadence:"once",notes:"",day:null,dueDate:"",monthWeek:null,active:true};
   if(c.id&&c.category==="todo") return editTodo(id);
   openModal('<h2>'+(c.id?"Edit card":"New card")+'</h2>'
     +'<label>Title</label><input id="f-title" value="'+esc(c.title)+'" placeholder="e.g. Wipe the microwave">'
-    +'<label>Divider (category)</label><select id="f-cat" onchange="todoMode(this.value===\'todo\')">'+Object.keys(CATS).filter(k=>k!=="todo").map(k=>'<option value="'+k+'"'+(c.category===k?" selected":"")+'>'+CATS[k]+'</option>').join("")+'</select>'
+    +'<label>Divider (category)</label><select id="f-cat" onchange="catMode(this.value===\'todo\')">'+Object.keys(CATS).filter(k=>k!=="todo").map(k=>'<option value="'+k+'"'+(c.category===k?" selected":"")+'>'+CATS[k]+'</option>').join("")+'</select>'
     +(fam().length?'<label>Belongs to</label><select id="f-who">'+whoOptions(c.who)+'</select>':"")
     +'<div class="row-between"><div style="flex:1"><label>Room / zone</label><input id="f-room" value="'+esc(c.room||"")+'" placeholder="Kitchen"></div>'
     +'<div style="width:110px"><label>Minutes</label><input id="f-min" type="number" min="0" value="'+(c.minutes||"")+'"></div></div>'
-    +'<div id="f-cadrow"><label>How often</label><select id="f-cad"><option value="daily"'+(c.cadence==="daily"?" selected":"")+'>Daily</option><option value="weekly"'+(c.cadence==="weekly"?" selected":"")+'>Weekly</option><option value="monthly"'+(c.cadence==="monthly"?" selected":"")+'>Monthly</option><option value="once"'+(c.cadence==="once"?" selected":"")+'>One-time</option></select></div>'
-    +'<div id="f-daywrap"><label>Day of week (for Basic Week / weekly)</label><select id="f-day"><option value="">—</option>'+DAY_KEYS.map(k=>'<option value="'+k+'"'+(c.day===k?" selected":"")+'>'+DAY_NAMES[k]+'</option>').join("")+'</select></div>'
-    +'<div id="f-duewrap"><label>Do by (one-time tasks)</label><input id="f-due" type="date" value="'+esc(c.dueDate||"")+'"></div>'
+        +'<div id="f-dayrow"><label id="f-daylabel">Day of week</label><select id="f-day"><option value="">—</option>'+DAY_KEYS.map(k2=>'<option value="'+k2+'"'+(c.day===k2?" selected":"")+'>'+DAY_NAMES[k2]+'</option>').join("")+'</select></div>'
+    +'<div id="f-ordrow"><label id="f-ordlabel">Which week</label><select id="f-ord"><option value="">—</option>'+[1,2,3,4,5].map(n=>'<option value="'+n+'"'+(+c.monthWeek===n?" selected":"")+'>'+["","1st","2nd","3rd","4th","5th / last"][n]+'</option>').join("")+'</select></div>'
+    +'<div id="f-duerow"><label>Scheduled for</label><input id="f-due" type="date" value="'+esc(c.dueDate||"")+'"></div>'
     +'<label>Notes</label><textarea id="f-notes" rows="2">'+esc(c.notes||"")+'</textarea>'
     +'<div class="btnrow"><button class="btn" onclick="saveCardForm(\''+(c.id||"")+'\')">Save card</button>' +(c.id?"<button class=\"btn secondary\" onclick=\"doRefile('"+c.id+"')\">Refile</button>":"")+(c.id?'<button class="btn ghost" onclick="delCard(\''+c.id+'\')">Delete</button>':"")
     +'<button class="btn ghost" onclick="closeModal()">Cancel</button></div>');
+  catMode(c.category);
 };
 window.saveCardForm=async id=>{
-  const preset=window._preset||{}; window._preset=null;
+  const preset=window._preset||{};
   const _cat=$("f-cat").value, _todo=_cat==="todo";
+  const title=$("f-title").value.trim();
+  if(!title){ toast("Give the card a title first."); return; }
+  let cadence, day=null, dueDate="", monthWeek=null;
+  if(_todo){ cadence="once"; }
+  else if(_cat==="basicweek"){ cadence="weekly"; day=$("f-day").value||null; }
+  else if(_cat==="monthly"){ cadence="monthly"; day=$("f-day").value||null; monthWeek=day?((+$("f-ord").value)||1):null; }
+  else if(_cat==="zones"){ cadence="monthly"; monthWeek=$("f-ord").value?(+$("f-ord").value):null; }
+  else if(_cat==="menus"){ cadence="weekly"; }
+  else if(_cat==="day"){ cadence="once"; dueDate=$("f-due").value||""; if(!dueDate){ toast("Pick a date for this Day card."); return; } }
+  else { cadence="weekly"; }
+  window._preset=null;
   const card=Object.assign({refileUntil:null,doneEver:false},
     preset,
     { id:id||undefined,
-    title:$("f-title").value.trim(), category:_cat, room:$("f-room").value.trim(),
-    minutes:+$("f-min").value||0, cadence:_todo?"once":$("f-cad").value, day:_todo?null:($("f-day").value||null),
-    dueDate:_todo?"":($("f-due").value||""), notes:$("f-notes").value.trim(), who:(($("f-who")&&$("f-who").value)||null), active:true });
-  if(!card.title){ toast("Give the card a title first."); return; }
+    title:title, category:_cat, room:$("f-room").value.trim(),
+    minutes:+$("f-min").value||0, cadence:cadence, day:day,
+    dueDate:dueDate, monthWeek:monthWeek, notes:$("f-notes").value.trim(), who:(($("f-who")&&$("f-who").value)||null), active:true });
   closeModal();
   await saveCard(card).catch(e=>toast("Couldn't save — check connection."));
   toast("Card filed. 🗂️");
 };
+
 window.delCard=id=>{ openModal('<h2>Delete this card?</h2><p class="progress-note">This can\'t be undone.</p>'+
 '<div class="btnrow"><button class="btn" style="background:var(--danger);" onclick="doDelCard(\''+id+'\')">Delete</button>'+
 '<button class="btn ghost" onclick="closeModal()">Cancel</button></div>'); };
@@ -883,7 +921,7 @@ function renderBoard(){
 window.addTodoFor=id=>{ window._todoWho=id; addTodo(); window._todoWho=null; };
 function renderWeek(){
   $("week-list").innerHTML=DAY_KEYS.map(k=>{
-    const dayCards=cards.filter(c=>c.active&&c.day===k&&!isDoneToday(c));
+    const dayCards=cards.filter(c=>c.active&&c.day===k&&c.category!=="monthly"&&c.category!=="zones"&&!isDoneToday(c));
     return '<div class="card weekday-card"><div class="row-between"><h3 style="margin:0">'+DAY_NAMES[k]+'</h3>'
       +'<button class="btn sage small" onclick="addCardForDay(\''+k+'\')">＋</button></div>'
       +(dayCards.length? dayCards.map(c=>'<div class="taskrow"><div class="tt"><b>'+esc(c.title)+'</b>'+whoTag(c.who)+'<div class="progress-note">'+esc(cardMeta(c))+'</div></div>'
@@ -895,19 +933,19 @@ window.addCardForDay=k=>openModalForNew({category:"basicweek",day:k,cadence:"wee
 function openModalForNew(preset){
   window._preset=preset||{};
   const defCat=(typeof currentCat!=="undefined"&&currentCat&&currentCat!=="all"&&currentCat!=="todo")?currentCat:"basicweek";
-  const c=Object.assign({title:"",category:defCat,room:"",minutes:15,cadence:"once",notes:"",day:null,dueDate:"",active:true},preset||{});
+  const c=Object.assign({title:"",category:defCat,room:"",minutes:15,cadence:"once",notes:"",day:null,dueDate:"",monthWeek:null,active:true},preset||{}); if(c.category==="day"&&!c.dueDate) c.dueDate=todayStr();
   openModal('<h2>New card</h2>'
     +'<label>Title</label><input id="f-title" value="'+esc(c.title)+'" placeholder="e.g. Wipe the microwave">'
-    +'<label>Divider (category)</label><select id="f-cat" onchange="todoMode(this.value===\'todo\')">'+Object.keys(CATS).filter(k2=>k2!=="todo").map(k2=>'<option value="'+k2+'"'+(c.category===k2?" selected":"")+'>'+CATS[k2]+'</option>').join("")+'</select>'
+    +'<label>Divider (category)</label><select id="f-cat" onchange="catMode(this.value===\'todo\')">'+Object.keys(CATS).filter(k2=>k2!=="todo").map(k2=>'<option value="'+k2+'"'+(c.category===k2?" selected":"")+'>'+CATS[k2]+'</option>').join("")+'</select>'
     +(fam().length?'<label>Belongs to</label><select id="f-who">'+whoOptions(c.who)+'</select>':"")
     +'<div class="row-between"><div style="flex:1"><label>Room / zone</label><input id="f-room" value="'+esc(c.room||"")+'" placeholder="Kitchen"></div>'
     +'<div style="width:110px"><label>Minutes</label><input id="f-min" type="number" min="0" value="'+(c.minutes||"")+'"></div></div>'
-    +'<div id="f-cadrow"><label>How often</label><select id="f-cad"><option value="daily"'+(c.cadence==="daily"?" selected":"")+'>Daily</option><option value="weekly"'+(c.cadence==="weekly"?" selected":"")+'>Weekly</option><option value="monthly"'+(c.cadence==="monthly"?" selected":"")+'>Monthly</option><option value="once"'+(c.cadence==="once"?" selected":"")+'>One-time</option></select></div>'
-    +'<div id="f-dayrow"><label>Day of week (for Basic Week / weekly)</label><select id="f-day"><option value="">—</option>'+DAY_KEYS.map(k2=>'<option value="'+k2+'"'+(c.day===k2?" selected":"")+'>'+DAY_NAMES[k2]+'</option>').join("")+'</select></div>'
-    +'<div id="f-duerow"><label>Do by (one-time tasks)</label><input id="f-due" type="date" value="'+esc(c.dueDate||"")+'"></div>'
+        +'<div id="f-dayrow"><label id="f-daylabel">Day of week</label><select id="f-day"><option value="">—</option>'+DAY_KEYS.map(k2=>'<option value="'+k2+'"'+(c.day===k2?" selected":"")+'>'+DAY_NAMES[k2]+'</option>').join("")+'</select></div>'
+    +'<div id="f-ordrow"><label id="f-ordlabel">Which week</label><select id="f-ord"><option value="">—</option>'+[1,2,3,4,5].map(n=>'<option value="'+n+'"'+(+c.monthWeek===n?" selected":"")+'>'+["","1st","2nd","3rd","4th","5th / last"][n]+'</option>').join("")+'</select></div>'
+    +'<div id="f-duerow"><label>Scheduled for</label><input id="f-due" type="date" value="'+esc(c.dueDate||"")+'"></div>'
     +'<label>Notes</label><textarea id="f-notes" rows="2">'+esc(c.notes||"")+'</textarea>'
     +'<div class="btnrow"><button class="btn" onclick="saveCardForm(\'\')">Save card</button><button class="btn ghost" onclick="closeModal()">Cancel</button></div>');
-  todoMode($("f-cat").value==="todo");
+  catMode($("f-cat").value);
   setTimeout(()=>{const el=$("f-title"); if(el) el.focus();},100);
 }
 
