@@ -371,12 +371,18 @@ if(!FIREBASE_READY){
         .then(()=>{ toast("Family login created 🎉"); renderAccount(); })
         .catch(e=>{ $("ac-err").textContent=friendlyAuthErr(e); });
     };
-        window.joinFamilyLogin=async ()=>{
-      if(!confirm("Switch this device to the family login?\n\nFirst, a backup file of the lists on THIS device will download — keep it, just in case.\n\nAfter switching, this device shows the family account's lists. Anything saved only on this device will NOT be merged into the family account.")) return;
+            window.joinFamilyLogin=()=>{
+      openModal('<h2>Join the family login?</h2><p class="progress-note">First, a backup file of the lists on <b>this device</b> will download — keep it, just in case.</p><p class="progress-note">After switching, this device shows the family account\'s lists. Anything saved only on this device will <b>not</b> be merged into the family account.</p><div class="btnrow"><button class="btn" onclick="doJoinFamilyLogin()">Back up &amp; switch</button><button class="btn ghost" onclick="closeModal()">Cancel</button></div>');
+    };
+    window.doJoinFamilyLogin=async ()=>{
+      closeModal();
       await exportAll().catch(()=>{});
       firebase.auth().signOut();
     };
-    window.familySignOut=()=>{ if(confirm("Sign out of the family account on this device?")) firebase.auth().signOut(); };
+        window.familySignOut=()=>{
+      openModal('<h2>Sign out?</h2><p class="progress-note">You\'ll sign out of the family account on this device. The shared lists stay in the account — sign back in anytime to see them again.</p><div class="btnrow"><button class="btn" onclick="doFamilySignOut()">Sign out</button><button class="btn ghost" onclick="closeModal()">Cancel</button></div>');
+    };
+    window.doFamilySignOut=()=>{ closeModal(); firebase.auth().signOut(); };
     function renderAccount(){
       const el=$("account-box"); if(!el||!U) return;
       if(U.isAnonymous){
