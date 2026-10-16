@@ -370,13 +370,13 @@ function dayCards(){
   const t=todayStr(), wd=DAY_KEYS[new Date().getDay()], dom=new Date().getDate();
   return cards.filter(c=>{
     if(!c.active || c.category==="routine") return false;
-    if(c.category==="todo"){ if(c.refileUntil && c.refileUntil>t) return false; return !c.doneEver; }
+    if(c.category==="todo"){ if(c.refileUntil && c.refileUntil>t) return false; return !c.doneEver || isDoneToday(c); }
     if(c.refileUntil && c.refileUntil>t) return false;
-    if(c.refileUntil && c.refileUntil<=t) return !c.doneEver;
+    if(c.refileUntil && c.refileUntil<=t) return !c.doneEver || isDoneToday(c);
     if(c.cadence==="daily") return true;
     if(c.day===wd) return true;
     if(c.cadence==="monthly" && dom===1) return true;
-    if(c.cadence==="once" && !c.doneEver && c.dueDate && c.dueDate<=t) return true;
+    if(c.cadence==="once" && c.dueDate && c.dueDate<=t && (!c.doneEver || isDoneToday(c))) return true;
     return false;
   }).sort((a,b)=>(a.minutes||0)-(b.minutes||0));
 }
