@@ -510,7 +510,7 @@ function renderToday(){
       +'<button class="btn sage small" onclick="goView(\'routines\')">Open</button></div></div>';
   }).join("") : '<div class="card"><div class="empty">No routines yet.</div></div>';
   const t=todayStr();
-  const parked=cards.filter(c=>c.active && c.category!=="routine" && c.refileUntil && c.refileUntil>t && whoVisible(c.who).sort((a,b)=>a.refileUntil<b.refileUntil?-1:1);
+  const parked=cards.filter(c=>c.active && c.category!=="routine" && c.refileUntil && c.refileUntil>t && whoVisible(c.who)).sort((a,b)=>a.refileUntil<b.refileUntil?-1:1);
   $("parked-wrap").innerHTML = parked.length
     ? '<details class="card"><summary style="cursor:pointer;display:flex;align-items:center;gap:.5rem;min-height:44px"><b>🅿 Parked ('+parked.length+')</b><span class="progress-note">out of sight, not lost</span></summary>'
       +parked.map(c=>'<div class="taskrow"><div class="tt" onclick="rowEdit(\''+c.id+'\')"><b>'+esc(c.title)+'</b>'+whoTag(c.who)+'<div class="progress-note">back '+(c.refileUntil===addDaysStr(t,1)?"tomorrow":fmtDay(c.refileUntil))+(c.category==="todo"?" · to-do":"")+'</div></div>'
