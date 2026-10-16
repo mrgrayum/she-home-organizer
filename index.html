@@ -495,7 +495,7 @@ window.doDelCard=async id=>{ closeModal(); await col("cards").doc(id).delete().c
 /* ---------------- ROUTINES ---------------- */
 function renderRoutines(){
   const rids=Object.keys(routines);
-  $("routines-list").innerHTML = rids.length ? rids.map(rid=>{
+  $("routines-list").innerHTML = (rids.length ? rids.map(rid=>{
     const r=routines[rid], checks=(((dayDoc&&dayDoc.routines)||{})[rid])||[];
     return '<div class="card"><div class="row-between"><h3 style="margin:0">'+esc(r.title)+'</h3>'
       +'<button class="iconbtn" onclick="editRoutine(\''+rid+'\')" title="Edit routine">✏️</button></div>'
