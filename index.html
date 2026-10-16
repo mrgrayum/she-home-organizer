@@ -961,11 +961,12 @@ function render(){
   if(!$("app")||$("app").classList.contains("hidden")) return;
   if(renderQueued) return; renderQueued=true;
   requestAnimationFrame(()=>{ renderQueued=false;
+    const views=[["today",renderToday],["cards",renderCardBox],["routines",renderRoutines],["week",renderWeek],["family",renderFamily],["chips",renderWhoChips],["board",renderBoard],["account",renderAccount]];
+    for(const v of views){ try{ v[1](); }catch(e){ console.warn("render:"+v[0],e); } }
     try{
-      renderToday(); renderCardBox(); renderRoutines(); renderWeek(); renderFamily(); renderWhoChips(); renderBoard(); renderAccount();
       const active=document.querySelector("#tabs button.active");
       if(active&&active.dataset.view==="progress") renderProgress();
-    }catch(e){ console.warn("render",e); }
+    }catch(e){ console.warn("render:progress",e); }
   });
 }
 async function boot(){
@@ -975,7 +976,7 @@ async function boot(){
   await seedIfNeeded().catch(e=>console.warn("seed",e));
   await migrateRoutineCards().catch(e=>console.warn("migrate",e));
   await migrateTodoCards().catch(e=>console.warn("migrate",e));
-  listenAll();
+  listenAll(); renderAccount();
 }
 async function migrateTodoCards(){
   const s=await col("cards").where("category","==","todo").get().catch(()=>null);
