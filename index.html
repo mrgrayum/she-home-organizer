@@ -145,6 +145,7 @@ code.cfg{background:#f1e9d8; padding:.15rem .4rem; border-radius:6px; font-size:
       <div class="kicker">Routines today</div>
       <div id="routines-today"></div>
       <div class="addbar"><button class="btn" id="add-today-btn">＋ Add a to-do</button></div>
+      <div id="parked-wrap"></div>
     </section>
 
     <!-- CARD BOX -->
@@ -255,6 +256,7 @@ const DAY_NAMES = {sun:"Sunday",mon:"Monday",tue:"Tuesday",wed:"Wednesday",thu:"
 const CATS = {basicweek:"Basic Week", monthly:"Monthly", zones:"Zones", menus:"Menus", todo:"To Do"};
 function todayStr(d){ d=d||new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 function addDaysStr(base,n){ const d=new Date(base+"T12:00:00"); d.setDate(d.getDate()+n); return todayStr(d); }
+function fmtDay(ds){ try{ return new Date(ds+"T12:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"}); }catch(e){ return ds; } }
 function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 function uid(){ return "c"+Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
 function toast(msg){ const t=$("toast"); t.textContent=msg; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),2200); }
@@ -312,7 +314,7 @@ async function refileCard(id, when){
   const t=todayStr();
   let target = when==="tomorrow" ? addDaysStr(t,1) : when==="week" ? addDaysStr(t,3) : addDaysStr(t,7);
   await col("cards").doc(id).set({refileUntil:target},{merge:true});
-  toast(when==="tomorrow" ? "Filed for tomorrow — no guilt. 💛" : "Refiled. It'll resurface on its own. 💛");
+  toast("Parked until "+fmtDay(target)+" \u2014 off your list, not lost. \ud83d\udc9b");
 }
 async function toggleRoutineItem(rid, itemId){
   const t=todayStr(); const cur=((dayDoc&&dayDoc.routines)||{})[rid]||[];
@@ -412,7 +414,7 @@ function renderToday(){
       +'<div class="meta">'+esc(cardMeta(focus))+'</div>'
       +(focus.notes?'<p>'+esc(focus.notes)+'</p>':"")
       +'<div class="btnrow" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()"><button class="btn" onclick="doDone(\''+focus.id+'\')">✓ Done</button>'
-      +'<button class="btn secondary" onclick="doRefile(\''+focus.id+'\')">Refile ↪</button></div></div>';
+      +'<button class="btn secondary" onclick="doRefile(\''+focus.id+'\')"">'+(focus.category==="todo"?"Park ⏸":"Refile ↪")+'</button></div></div>';
   }
   $("ondeck-count").textContent = deck.length? "("+deck.length+" card"+(deck.length>1?"s":"")+")":"";
   const rest=deck.slice(1);
@@ -438,17 +440,26 @@ function renderToday(){
     return '<div class="card"><div class="row-between"><div><b>'+esc(r.title)+'</b><div class="progress-note">'+(nd?nd+" step"+(nd>1?"s":"")+" left":"All done ✨")+'</div></div>'
       +'<button class="btn sage small" onclick="goView(\'routines\')">Open</button></div></div>';
   }).join("") : '<div class="card"><div class="empty">No routines yet.</div></div>';
+  const t=todayStr();
+  const parked=cards.filter(c=>c.active && c.category!=="routine" && c.refileUntil && c.refileUntil>t).sort((a,b)=>a.refileUntil<b.refileUntil?-1:1);
+  $("parked-wrap").innerHTML = parked.length
+    ? '<details class="card"><summary style="cursor:pointer;display:flex;align-items:center;gap:.5rem;min-height:44px"><b>🅿 Parked ('+parked.length+')</b><span class="progress-note">out of sight, not lost</span></summary>'
+      +parked.map(c=>'<div class="taskrow"><div class="tt" onclick="rowEdit(\''+c.id+'\')"><b>'+esc(c.title)+'</b><div class="progress-note">back '+(c.refileUntil===addDaysStr(t,1)?"tomorrow":fmtDay(c.refileUntil))+(c.category==="todo"?" · to-do":"")+'</div></div>'
+      +'<button class="btn small secondary" onclick="doUnpark(\''+c.id+'\')" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()">↩ Today</button></div>').join("")+"</details>"
+    : '';
 }
 window.doDone=id=>markDone(id).then(render).catch(e=>toast("Couldn't save — check connection."));
 window.doRefile=id=>{
-  openModal('<h2>Refile this card</h2><p class="progress-note">No guilt — filing it away is the system working as designed.</p>'
+  const rc=cards.find(x=>x.id===id),isTodo=rc&&rc.category==="todo",t0=todayStr(),d1=addDaysStr(t0,1),d3=addDaysStr(t0,3),d7=addDaysStr(t0,7);
+  openModal('<h2>'+(isTodo?"Park this to-do":"Refile this card")+'</h2><p class="progress-note">'+(isTodo?"Off today's list, not out of your life \u2014 it pops back up on its own.":"No guilt \u2014 filing it away is the system working as designed.")+'</p>'
     +'<div class="btnrow" style="flex-direction:column">'
-    +'<button class="btn" onclick="doRefileGo(\''+id+'\',\'tomorrow\')">Tomorrow\'s stack</button>'
-    +'<button class="btn secondary" onclick="doRefileGo(\''+id+'\',\'week\')">Later this week</button>'
-    +'<button class="btn secondary" onclick="doRefileGo(\''+id+'\',\'nextweek\')">Next week</button>'
+    +'<button class="btn" onclick="doRefileGo(\''+id+'\',\'tomorrow\')">Until tomorrow ('+fmtDay(d1)+')</button>'
+    +'<button class="btn secondary" onclick="doRefileGo(\''+id+'\',\'week\')">Later this week ('+fmtDay(d3)+')</button>'
+    +'<button class="btn secondary" onclick="doRefileGo(\''+id+'\',\'nextweek\')">Until next week ('+fmtDay(d7)+')</button>'
     +'<button class="btn ghost" onclick="closeModal()">Keep it here</button></div>');
 };
 window.doRefileGo=(id,when)=>{ closeModal(); refileCard(id,when).then(render).catch(e=>toast("Couldn't save — check connection.")); };
+window.doUnpark=id=>{ col("cards").doc(id).set({refileUntil:null},{merge:true}).then(()=>{ toast("Back on today's list. \ud83d\udc9b"); render(); }).catch(e=>toast("Couldn't save \u2014 check connection.")); };
 
 window.addTodo=()=>{
   openModal('<h2>To-do for today</h2><p class="progress-note">Quick capture \-\ it stays on deck until done, rolling into tomorrow if you don\'t get to it.</p>'
@@ -470,7 +481,7 @@ window.editTodo=id=>{
     +'<label>Title</label><input id="f-title" value="'+esc(c.title)+'">'
     +'<div style="width:120px"><label>Minutes</label><input id="f-min" type="number" min="0" value="'+(c.minutes||"")+'"></div>'
     +'<label>Notes</label><textarea id="f-notes" rows="2">'+esc(c.notes||"")+'</textarea>'
-    +'<div class="btnrow"><button class="btn" onclick="saveTodoEdit(\''+id+'\')">Save</button>'
+    +'<div class="btnrow"><button class="btn" onclick="saveTodoEdit(\''+id+'\')">Save</button><button class="btn secondary" onclick="doRefile(\''+id+'\')">Park…</button>'
     +'<button class="btn ghost" onclick="delCard(\''+id+'\')">Delete</button>'
     +'<button class="btn ghost" onclick="closeModal()">Cancel</button></div>');
 };
