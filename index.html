@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Home Task Organizer — Sidetracked Home Executives</title>
+<title>Grayum Home Task Organizer</title>
 <meta name="description" content="A household task organizer built on the Sidetracked Home Executives card-file system.">
 <style>
 :root{
@@ -63,6 +63,14 @@ label{font-size:.85rem; font-weight:600; color:var(--ink-soft); display:block; m
 .iconbtn.ord[disabled]{opacity:.3;}
 .who-chip{flex:none;display:inline-flex;align-items:center;gap:.32rem;padding:.32rem .7rem;border-radius:99px;border:1.5px solid var(--line);background:var(--card);font-size:.8rem;font-weight:600;color:var(--ink-soft);min-height:38px;}
 .who-chip.on{background:var(--ink);color:#fff;border-color:var(--ink);}
+#board-cols{display:flex;gap:.7rem;overflow-x:auto;padding:.2rem .1rem .8rem;scroll-snap-type:x proximity;}
+.bcol{flex:0 0 80%;max-width:340px;scroll-snap-align:start;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:.7rem;box-shadow:var(--shadow);}
+@media(min-width:760px){.bcol{flex:1 1 0;max-width:none;}}
+.bcol-head{display:flex;align-items:center;gap:.45rem;margin-bottom:.35rem;}
+.bcol-head .progress-note{margin-left:auto;}
+.bcol-bar{height:6px;border-radius:99px;background:var(--line);margin-bottom:.4rem;overflow:hidden;}
+.bcol-bar>div{height:100%;background:var(--sage);border-radius:99px;transition:width .3s;}
+.broutine{border-top:1px solid var(--line);margin-top:.35rem;}
 .who-tag{display:inline-block;font-size:.68rem;font-weight:700;padding:.08rem .5rem;border-radius:99px;margin-left:.35rem;vertical-align:middle;white-space:nowrap;}
 .tabs{position:fixed; bottom:0; left:0; right:0; z-index:30; display:flex;
   background:#fffdf8; border-top:1px solid var(--line);
@@ -131,7 +139,7 @@ code.cfg{background:#f1e9d8; padding:.15rem .4rem; border-radius:6px; font-size:
 
 <div id="app" class="hidden">
   <div class="topbar">
-    <h1>🗂️ Home Task Organizer</h1>
+    <h1>🗂️ Grayum Home Task Organizer</h1>
     <div class="sub" id="date-line"></div>
   </div>
   <div class="wrap">
@@ -151,6 +159,13 @@ code.cfg{background:#f1e9d8; padding:.15rem .4rem; border-radius:6px; font-size:
       <div id="routines-today"></div>
       <div class="addbar"><button class="btn" id="add-today-btn">＋ Add a to-do</button></div>
       <div id="parked-wrap"></div>
+    </section>
+
+    <!-- BOARD -->
+    <section id="view-board" class="view">
+      <div class="kicker">The board</div>
+      <p class="progress-note">Everyone’s day, side by side. Check things off right here — it all stays in sync.</p>
+      <div id="board-cols"></div>
     </section>
 
     <!-- CARD BOX -->
@@ -230,7 +245,7 @@ code.cfg{background:#f1e9d8; padding:.15rem .4rem; border-radius:6px; font-size:
   </div>
 
   <nav class="tabs" id="tabs">
-    <button data-view="today" class="active"><span class="ico">☀️</span>Today</button>
+    <button data-view="today" class="active"><span class="ico">☀️</span>Today</button><button data-view="board"><span class="ico">📋</span>Board</button>
     <button data-view="cards"><span class="ico">🗂️</span>Cards</button>
     <button data-view="routines"><span class="ico">🔁</span>Routines</button>
     <button data-view="week"><span class="ico">📅</span>Week</button>
@@ -554,7 +569,7 @@ window.addTodo=()=>{
   openModal('<h2>To-do for today</h2><p class="progress-note">Quick capture \-\ it stays on deck until done, rolling into tomorrow if you don\'t get to it.</p>'
     +'<label>Title</label><input id="f-ttitle" placeholder="e.g. Call the dentist">'
     +'<div style="width:120px"><label>Minutes</label><input id="f-tmin" type="number" min="0" value="15"></div>'
-    +(fam().length?'<label>Belongs to</label><select id="f-twho">'+whoOptions((selWho&&selWho.length===1)?selWho[0]:null)+'</select>':"")
+    +(fam().length?'<label>Belongs to</label><select id="f-twho">'+whoOptions(window._todoWho||((selWho&&selWho.length===1)?selWho[0]:null))+'</select>':"")
     +'<label>Notes</label><textarea id="f-tnotes" rows="2"></textarea>'
     +'<div class="btnrow"><button class="btn" onclick="saveTodo()">Add to today</button><button class="btn ghost" onclick="closeModal()">Cancel</button></div>');
   setTimeout(()=>$("f-ttitle").focus(),100);
@@ -708,6 +723,42 @@ window.saveNewRoutine=async ()=>{
 };
 
 /* ---------------- WEEK ---------------- */
+function boardRow(c){
+  return '<div class="taskrow" onmousedown="lpStart(\''+c.id+'\')" onmouseup="lpEnd()" onmouseleave="lpEnd()" ontouchstart="lpStart(\''+c.id+'\')" ontouchend="lpEnd()" ontouchmove="lpEnd()" oncontextmenu="return false">'
+    +'<button class="check" onclick="doDone(\''+c.id+'\')" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()"></button>'
+    +'<div class="tt" onclick="rowEdit(\''+c.id+'\')"><b>'+esc(c.title)+'</b>'+whoTag(c.who)+'<div class="progress-note">'+esc(cardMeta(c))+'</div></div>'
+    +'<span class="minutes">'+(c.minutes?c.minutes+"m":"")+'</span></div>';
+}
+function boardRoutine(rid){
+  const r=routines[rid], checks=(((dayDoc&&dayDoc.routines)||{})[rid])||[];
+  const nd=r.items.filter(i=>!checks.includes(i.id)).length;
+  return '<div class="broutine"><div style="margin:.35rem 0 .15rem"><b>'+esc(r.title)+'</b> <span class="progress-note">'+(nd?nd+" left":"done \u2728")+'</span></div>'
+    +r.items.map(it=>'<div class="taskrow'+(checks.includes(it.id)?" done":"")+'">'
+      +'<button class="check'+(checks.includes(it.id)?" done":"")+'" onclick="togRoutine(\''+rid+'\',\''+it.id+'\')">'+(checks.includes(it.id)?"\u2713":"")+'</button>'
+      +'<div class="tt">'+esc(it.text)+'</div></div>').join("")+'</div>';
+}
+function renderBoard(){
+  const el=$("board-cols"); if(!el) return;
+  const list=fam();
+  if(!list.length){
+    el.innerHTML='<div class="card"><div class="empty"><h3 style="margin:.2rem 0">No board yet</h3><p class="progress-note">Add family members in Settings \u2192 Family and each person gets their own column here.</p><div class="btnrow"><button class="btn small" onclick="goView(\'settings\')">Go to Settings</button></div></div></div>';
+    return;
+  }
+  el.innerHTML=list.map(m=>{
+    const mine=w=>!w||w===m.id;
+    const all=dayCards().filter(c=>mine(c.who));
+    const deck=onDeck().filter(c=>mine(c.who));
+    const done=all.filter(isDoneToday);
+    const pct=all.length?Math.round(done.length/all.length*100):100;
+    const rids=Object.keys(routines).sort((a,b)=>routineOrderPos(a)-routineOrderPos(b)).filter(rid=>mine(routines[rid].who));
+    return '<div class="bcol"><div class="bcol-head"><span style="width:10px;height:10px;border-radius:99px;background:'+m.color+';display:inline-block;flex:none"></span><b>'+esc(m.name)+'</b><span class="progress-note">'+done.length+'/'+all.length+' \u00B7 '+pct+'%</span></div>'
+      +'<div class="bcol-bar"><div style="width:'+pct+'%"></div></div>'
+      +(deck.length?deck.map(boardRow).join(""):'<div class="progress-note" style="padding:.3rem 0">All clear \uD83C\uDF89</div>')
+      +(rids.length?rids.map(boardRoutine).join(""):"")
+      +'<button class="btn sage small" style="margin-top:.55rem;width:100%" onclick="addTodoFor(\''+m.id+'\')">\uFF0B To-do</button></div>';
+  }).join("");
+}
+window.addTodoFor=id=>{ window._todoWho=id; addTodo(); window._todoWho=null; };
 function renderWeek(){
   $("week-list").innerHTML=DAY_KEYS.map(k=>{
     const dayCards=cards.filter(c=>c.active&&c.day===k&&!isDoneToday(c));
@@ -835,7 +886,7 @@ function render(){
   if(renderQueued) return; renderQueued=true;
   requestAnimationFrame(()=>{ renderQueued=false;
     try{
-      renderToday(); renderCardBox(); renderRoutines(); renderWeek(); renderFamily(); renderWhoChips();
+      renderToday(); renderCardBox(); renderRoutines(); renderWeek(); renderFamily(); renderWhoChips(); renderBoard();
       const active=document.querySelector("#tabs button.active");
       if(active&&active.dataset.view==="progress") renderProgress();
     }catch(e){ console.warn("render",e); }
