@@ -158,7 +158,7 @@ code.cfg{background:#f1e9d8; padding:.15rem .4rem; border-radius:6px; font-size:
     <!-- ROUTINES -->
     <section id="view-routines" class="view">
       <div class="kicker">Routines</div>
-      <p class="progress-note">Small, repeatable, done-before-you-think-about-it. They reset fresh every morning — yesterday is forgiven.</p>
+      <p class="progress-note">Small, repeatable, done-before-you-think-about-it. They reset fresh every morning — yesterday is forgiven. Daily repeating tasks live here, in one place, so nothing ever shows up twice.</p>
       <div id="routines-list"></div>
     </section>
 
@@ -250,7 +250,7 @@ const FIREBASE_READY = FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey.indexOf(
 const $ = id => document.getElementById(id);
 const DAY_KEYS = ["sun","mon","tue","wed","thu","fri","sat"];
 const DAY_NAMES = {sun:"Sunday",mon:"Monday",tue:"Tuesday",wed:"Wednesday",thu:"Thursday",fri:"Friday",sat:"Saturday"};
-const CATS = {routine:"Daily Routine", basicweek:"Basic Week", monthly:"Monthly", zones:"Zones", menus:"Menus", todo:"To Do"};
+const CATS = {basicweek:"Basic Week", monthly:"Monthly", zones:"Zones", menus:"Menus", todo:"To Do"};
 function todayStr(d){ d=d||new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 function addDaysStr(base,n){ const d=new Date(base+"T12:00:00"); d.setDate(d.getDate()+n); return todayStr(d); }
 function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
@@ -326,12 +326,6 @@ async function saveRoutine(rid, routine){
 function starterCards(){
   const C=(title,category,room,minutes,cadence,notes,day)=>({title,category,room,minutes,cadence,notes:notes||"",day:day||null,active:true,refileUntil:null,doneEver:false,starter:true});
   return [
-    C("Make the beds","routine","Bedrooms",5,"daily","Straighten covers and pillows — good enough is perfect."),
-    C("Get dressed to the shoes","routine","Bedroom",5,"daily","The SHE classic: dressed for the day changes the whole day."),
-    C("Swish & swipe the bathroom","routine","Bathrooms",5,"daily","Quick swish of the toilet, swipe of the sink."),
-    C("Start a load of laundry","routine","Laundry",3,"daily","One load a day keeps the mountain away."),
-    C("15-minute room rescue","routine","Living areas",15,"daily","Set a timer, rescue the most-lived-in room, stop when it dings."),
-    C("Shine the kitchen sink","routine","Kitchen",3,"daily","End-of-day signal that the kitchen is closed."),
     C("Weekly home blessing","basicweek","","45","weekly","Top-to-bottom quick blessing of the whole house.","mon"),
     C("Bathrooms day","basicweek","Bathrooms",30,"weekly","Toilets, sinks, mirrors, floors.","tue"),
     C("Bedrooms & linens","basicweek","Bedrooms",30,"weekly","Sheets, dusting, floors.","wed"),
@@ -373,7 +367,7 @@ function isDoneToday(c){ return !!doneMap()[c.id]; }
 function onDeck(){
   const t=todayStr(), wd=DAY_KEYS[new Date().getDay()], dom=new Date().getDate();
   return cards.filter(c=>{
-    if(!c.active || isDoneToday(c)) return false;
+    if(!c.active || isDoneToday(c) || c.category==="routine") return false;
     if(c.refileUntil && c.refileUntil>t) return false;
     if(c.refileUntil && c.refileUntil<=t) return true;
     if(c.cadence==="daily") return true;
@@ -392,7 +386,6 @@ function cardMeta(c){
   return bits.join(" · ");
 }
 function pillFor(c){
-  if(c.category==="routine") return '<span class="pill sage">Routine</span>';
   if(c.category==="basicweek") return '<span class="pill">Week</span>';
   if(c.category==="todo") return '<span class="pill gold">To do</span>';
   return '<span class="pill">'+esc(CATS[c.category]||c.category)+'</span>';
@@ -685,7 +678,18 @@ async function boot(){
   $("app").classList.remove("hidden");
   $("date-line").textContent=new Date().toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric"});
   await seedIfNeeded().catch(e=>console.warn("seed",e));
+  await migrateRoutineCards().catch(e=>console.warn("migrate",e));
   listenAll();
+}
+async function migrateRoutineCards(){
+  const s=await col("cards").where("category","==","routine").get().catch(()=>null);
+  if(!s||s.empty) return;
+  const b=db.batch(); let n=0;
+  s.forEach(d=>{ const c=d.data()||{}; n++;
+    if(c.starter){ b.delete(d.ref); }
+    else { b.set(d.ref,{category:"todo"},{merge:true}); }
+  });
+  if(n) await b.commit().catch(()=>{});
 }
 </script>
 </body>
