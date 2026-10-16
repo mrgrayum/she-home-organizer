@@ -207,7 +207,7 @@ code.cfg{background:#f1e9d8; padding:.15rem .4rem; border-radius:6px; font-size:
     <!-- ROUTINES -->
     <section id="view-routines" class="view">
       <div class="row-between" style="align-items:center"><div class="kicker" style="margin:0">Routines</div><button class="btn ghost small" id="routine-order-toggle" onclick="toggleRoutineOrder()">⇅ Order</button></div>
-      <p class="progress-note">Small, repeatable, done-before-you-think-about-it. They reset fresh every morning — yesterday is forgiven. Daily repeating tasks live here, in one place, so nothing ever shows up twice.</p>
+      <p class="progress-note">Small, repeatable, done-before-you-think-about-it. They reset fresh every morning — yesterday is forgiven. Build and arrange them here — check them off from Today or the Board, where they show up collapsed.</p>
       <div id="routines-list"></div>
     </section>
 
@@ -593,14 +593,19 @@ function renderToday(){
         +'<div class="tt" onclick="rowEdit(\''+c.id+'\')"><b>'+esc(c.title)+'</b>'+whoTag(c.who)+'<div class="progress-note">'+esc(cardMeta(c))+'</div></div>'
         +'<span class="minutes">'+(c.minutes?c.minutes+"m":"")+'</span></div>').join("")
     : '<div class="empty" style="padding:1.2rem;text-align:center"><h3 style="margin:.2rem 0">All clear! 🎉</h3><p class="progress-note">The deck is empty. Enjoy the rest of your day — or pull a card from the box if you\'re feeling ambitious.</p><div class="btnrow" style="justify-content:center"><button class="btn secondary small" onclick="goView(\'cards\')">Browse the card box</button></div></div>';
-  // routines snapshot
+  // routines snapshot (collapsed; tap to expand and check off)
   const rids=Object.keys(routines).sort((a,b)=>routineOrderPos(a)-routineOrderPos(b)).filter(rid=>whoVisible(routines[rid].who));
   $("routines-today").innerHTML = rids.length ? rids.map(rid=>{
     const r=routines[rid], checks=(((dayDoc&&dayDoc.routines)||{})[rid])||[];
     const nd=r.items.filter(i=>!checks.includes(i.id)).length;
-    return '<div class="card"><div class="row-between"><div><b>'+esc(r.title)+'</b>'+whoTag(r.who)+'<div class="progress-note">'+(nd?nd+" step"+(nd>1?"s":"")+" left":"All done ✨")+'</div></div>'
-      +'<button class="btn sage small" onclick="goView(\'routines\')">Open</button></div></div>';
+    const open=window._todayOpen&&window._todayOpen[rid];
+    return '<div class="card"><div class="broute-head" onclick="toggleTodayRoutine(\''+rid+'\')">'
+      +'<span class="chev">'+(open?"▾":"▸")+'</span><div><b>'+esc(r.title)+'</b>'+whoTag(r.who)+'</div>'
+      +'<span class="progress-note">'+(nd?nd+" step"+(nd>1?"s":"")+" left":"All done ✨")+'</span></div>'
+      +(open?'<div class="broute-steps">'+routineStepsHtml(rid)+'</div>':"")
+      +'</div>';
   }).join("") : '<div class="card"><div class="empty">No routines yet.</div></div>';
+
   const t=todayStr();
   const parked=cards.filter(c=>c.active && c.category!=="routine" && c.refileUntil && c.refileUntil>t && whoVisible(c.who)).sort((a,b)=>a.refileUntil<b.refileUntil?-1:1);
   $("parked-wrap").innerHTML = parked.length
@@ -732,16 +737,14 @@ function renderRoutines(){
   const rids=Object.keys(routines).sort((a,b)=>routineOrderPos(a)-routineOrderPos(b));
   $("routine-order-toggle").textContent=routineOrderMode?"✓ Done":"⇅ Order";
   $("routines-list").innerHTML = (rids.length ? rids.map((rid,idx)=>{
-    const r=routines[rid], checks=(((dayDoc&&dayDoc.routines)||{})[rid])||[];
+    const r=routines[rid];
     return '<div class="card"><div class="row-between"><h3 style="margin:0">'+esc(r.title)+'</h3>'+whoTag(r.who)
       +(routineOrderMode
         ? '<div style="display:flex;gap:2px">'
           +'<button class="iconbtn ord" onclick="moveRoutine(\''+rid+'\',-1)" title="Move up"'+(idx===0?' disabled':'')+'>▲</button>'
           +'<button class="iconbtn ord" onclick="moveRoutine(\''+rid+'\',1)" title="Move down"'+(idx===rids.length-1?' disabled':'')+'>▼</button></div>'
         : '<button class="iconbtn" onclick="editRoutine(\''+rid+'\')" title="Edit routine">✏️</button>')+'</div>'
-      +r.items.map(it=>'<div class="taskrow'+(checks.includes(it.id)?" done":"")+'">'
-        +'<button class="check'+(checks.includes(it.id)?" done":"")+'" onclick="togRoutine(\''+rid+'\',\''+it.id+'\')">'+(checks.includes(it.id)?"✓":"")+'</button>'
-        +'<div class="tt">'+esc(it.text)+'</div></div>').join("")
+      +r.items.map(it=>'<div class="taskrow"><div class="tt">'+esc(it.text)+'</div></div>').join("")
       +'<div class="btnrow"><button class="btn secondary small" onclick="addRoutineItem(\''+rid+'\')">＋ Add a step</button></div></div>';
   }).join("") : '<div class="card"><div class="empty">No routines yet.</div><div class="btnrow"><button class="btn" onclick="addRoutine()">＋ Create a routine</button></div></div>')
   + (rids.length ? '<div class="addbar"><button class="btn" onclick="addRoutine()">＋ New routine</button></div>':"");
@@ -806,19 +809,25 @@ function boardRow(c){
     +'<div class="tt" onclick="rowEdit(\''+c.id+'\')"><b>'+esc(c.title)+'</b>'+whoTag(c.who)+'<div class="progress-note">'+esc(cardMeta(c))+'</div></div>'
     +'<span class="minutes">'+(c.minutes?c.minutes+"m":"")+'</span></div>';
 }
+function routineStepsHtml(rid){
+  const r=routines[rid], checks=(((dayDoc&&dayDoc.routines)||{})[rid])||[];
+  return r.items.map(it=>'<div class="taskrow'+(checks.includes(it.id)?" done":"")+'">'
+    +'<button class="check'+(checks.includes(it.id)?" done":"")+'" onclick="togRoutine(\''+rid+'\',\''+it.id+'\')">'+(checks.includes(it.id)?"✓":"")+'</button>'
+    +'<div class="tt">'+esc(it.text)+'</div></div>').join("");
+}
 function boardRoutine(rid){
   const r=routines[rid], checks=(((dayDoc&&dayDoc.routines)||{})[rid])||[];
   const nd=r.items.filter(i=>!checks.includes(i.id)).length;
   const open=window._boardOpen&&window._boardOpen[rid];
   return '<div class="broutine"><div class="broute-head" onclick="toggleBoardRoutine(\''+rid+'\')">'
-    +'<span class="chev">'+(open?"\u25BE":"\u25B8")+'</span><b>'+esc(r.title)+'</b><span class="progress-note">'+(nd?nd+" left":"done \u2728")+'</span></div>'
-    +(open?'<div class="broute-steps">'+r.items.map(it=>'<div class="taskrow'+(checks.includes(it.id)?" done":"")+'">'
-      +'<button class="check'+(checks.includes(it.id)?" done":"")+'" onclick="togRoutine(\''+rid+'\',\''+it.id+'\')">'+(checks.includes(it.id)?"\u2713":"")+'</button>'
-      +'<div class="tt">'+esc(it.text)+'</div></div>').join("")+'</div>':"")
+    +'<span class="chev">'+(open?"▾":"▸")+'</span><b>'+esc(r.title)+'</b><span class="progress-note">'+(nd?nd+" left":"done ✨")+'</span></div>'
+    +(open?'<div class="broute-steps">'+routineStepsHtml(rid)+'</div>':"")
     +'</div>';
 }
 window._boardOpen=window._boardOpen||{};
 window.toggleBoardRoutine=rid=>{ window._boardOpen[rid]=!window._boardOpen[rid]; renderBoard(); };
+window._todayOpen=window._todayOpen||{};
+window.toggleTodayRoutine=rid=>{ window._todayOpen[rid]=!window._todayOpen[rid]; render(); };
 function renderBoard(){
   const el=$("board-cols"); if(!el) return;
   el.style.gridTemplateColumns="";
