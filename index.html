@@ -143,7 +143,7 @@ code.cfg{background:#f1e9d8; padding:.15rem .4rem; border-radius:6px; font-size:
       </div>
       <div class="kicker">Routines today</div>
       <div id="routines-today"></div>
-      <div class="addbar"><button class="btn" id="add-today-btn">＋ Add a task for today</button></div>
+      <div class="addbar"><button class="btn" id="add-today-btn">＋ Add a to-do</button></div>
     </section>
 
     <!-- CARD BOX -->
@@ -153,6 +153,7 @@ code.cfg{background:#f1e9d8; padding:.15rem .4rem; border-radius:6px; font-size:
       <div class="catbar" id="catbar"></div>
       <div id="cardbox-list"></div>
       <div class="addbar"><button class="btn" id="add-card-btn">＋ Add a card</button></div>
+      <div class="addbar" id="todo-hint" style="display:none"><span class="progress-note">To-dos are quick-captured from the <b>Today</b> tab \-\ they live on your deck until done.</span></div>
     </section>
 
     <!-- ROUTINES -->
@@ -368,8 +369,9 @@ function onDeck(){
   const t=todayStr(), wd=DAY_KEYS[new Date().getDay()], dom=new Date().getDate();
   return cards.filter(c=>{
     if(!c.active || isDoneToday(c) || c.category==="routine") return false;
+    if(c.category==="todo"){ if(c.refileUntil && c.refileUntil>t) return false; return !c.doneEver; }
     if(c.refileUntil && c.refileUntil>t) return false;
-    if(c.refileUntil && c.refileUntil<=t) return true;
+    if(c.refileUntil && c.refileUntil<=t) return !c.doneEver;
     if(c.cadence==="daily") return true;
     if(c.day===wd) return true;
     if(c.cadence==="monthly" && dom===1) return true;
@@ -411,7 +413,7 @@ function renderToday(){
     ? rest.map(c=>'<div class="taskrow'+(isDoneToday(c)?" done":"")+'">'
       +'<button class="check'+(isDoneToday(c)?" done":"")+'" onclick="doDone(\''+c.id+'\')">'+(isDoneToday(c)?"✓":"")+'</button>'
       +'<div class="tt"><b>'+esc(c.title)+'</b><div class="progress-note">'+esc(cardMeta(c))+'</div></div>'
-      +'<span class="minutes">'+(c.minutes?c.minutes+"m":"")+'</span></div>').join("")
+      +'<span class="minutes">'+(c.minutes?c.minutes+"m":"")+'</span>'+(c.category==="todo"?'<button class="iconbtn" onclick="editCard(\'+c.id+\')" title="Edit to-do">️</button>':"")+'</div>').join("")
     : '<div class="empty">Nothing else on deck.</div>';
   const total=deck.reduce((s,c)=>s+(+c.minutes||0),0);
   const doneM=deck.filter(isDoneToday).reduce((s,c)=>s+(+c.minutes||0),0);
@@ -441,6 +443,36 @@ window.doRefile=id=>{
 };
 window.doRefileGo=(id,when)=>{ closeModal(); refileCard(id,when).then(render).catch(e=>toast("Couldn't save — check connection.")); };
 
+window.addTodo=()=>{
+  openModal('<h2>To-do for today</h2><p class="progress-note">Quick capture \-\ it stays on deck until done, rolling into tomorrow if you don\'t get to it.</p>'
+    +'<label>Title</label><input id="f-ttitle" placeholder="e.g. Call the dentist">'
+    +'<div style="width:120px"><label>Minutes</label><input id="f-tmin" type="number" min="0" value="15"></div>'
+    +'<label>Notes</label><textarea id="f-tnotes" rows="2"></textarea>'
+    +'<div class="btnrow"><button class="btn" onclick="saveTodo()">Add to today</button><button class="btn ghost" onclick="closeModal()">Cancel</button></div>');
+  setTimeout(()=>$("f-ttitle").focus(),100);
+};
+window.saveTodo=async ()=>{
+  const t=$("f-ttitle").value.trim(); if(!t){ toast("Give it a title first."); return; }
+  closeModal();
+  await saveCard({title:t,category:"todo",room:"",minutes:+$("f-tmin").value||0,cadence:"once",day:null,dueDate:"",notes:$("f-tnotes").value.trim(),refileUntil:null,doneEver:false,active:true}).catch(e=>toast("Couldn\'t save \-\ check connection."));
+  toast("Added to today.");
+};
+window.editTodo=id=>{
+  const c=cards.find(x=>x.id===id); if(!c) return;
+  openModal('<h2>Edit to-do</h2>'
+    +'<label>Title</label><input id="f-title" value="'+esc(c.title)+'">'
+    +'<div style="width:120px"><label>Minutes</label><input id="f-min" type="number" min="0" value="'+(c.minutes||"")+'"></div>'
+    +'<label>Notes</label><textarea id="f-notes" rows="2">'+esc(c.notes||"")+'</textarea>'
+    +'<div class="btnrow"><button class="btn" onclick="saveTodoEdit(\'+id+\')">Save</button>'
+    +'<button class="btn ghost" onclick="delCard(\'+id+\')">Delete</button>'
+    +'<button class="btn ghost" onclick="closeModal()">Cancel</button></div>');
+};
+window.saveTodoEdit=async id=>{
+  const t=$("f-title").value.trim(); if(!t){ toast("Give it a title first."); return; }
+  closeModal();
+  await saveCard({id:id,title:t,category:"todo",minutes:+$("f-min").value||0,notes:$("f-notes").value.trim(),cadence:"once",day:null,dueDate:""}).catch(e=>toast("Couldn\'t save \-\ check connection."));
+};
+window.todoMode=on=>{ ["f-cadrow","f-dayrow","f-duerow","f-daywrap","f-duerow"].forEach(id=>{ const el=$(id); if(el) el.style.display=on?"none":""; }); };
 /* ---------------- CARD BOX ---------------- */
 function renderCatbar(){
   const cats=[["all","All"]].concat(Object.keys(CATS).map(k=>[k,CATS[k]]));
@@ -449,6 +481,8 @@ function renderCatbar(){
 window.setCat=k=>{ currentCat=k; render(); };
 function renderCardBox(){
   renderCatbar();
+  $("add-card-btn").style.display=currentCat==="todo"?"none":"";
+  $("todo-hint").style.display=currentCat==="todo"?"":"none";
   const list=cards.filter(c=>currentCat==="all"||c.category===currentCat)
     .sort((a,b)=>(a.category||"").localeCompare(b.category||"")||(a.title||"").localeCompare(b.title||""));
   $("cardbox-list").innerHTML = list.length ? list.map(c=>
@@ -461,12 +495,13 @@ function renderCardBox(){
 }
 window.editCard=id=>{
   const c=cards.find(x=>x.id===id)||{title:"",category:currentCat==="all"?"todo":currentCat,room:"",minutes:15,cadence:"once",notes:"",day:null,dueDate:"",active:true};
+  if(c.id&&c.category==="todo") return editTodo(id);
   openModal('<h2>'+(c.id?"Edit card":"New card")+'</h2>'
     +'<label>Title</label><input id="f-title" value="'+esc(c.title)+'" placeholder="e.g. Wipe the microwave">'
-    +'<label>Divider (category)</label><select id="f-cat">'+Object.keys(CATS).map(k=>'<option value="'+k+'"'+(c.category===k?" selected":"")+'>'+CATS[k]+'</option>').join("")+'</select>'
+    +'<label>Divider (category)</label><select id="f-cat" onchange="todoMode(this.value===\'todo\')">'+Object.keys(CATS).map(k=>'<option value="'+k+'"'+(c.category===k?" selected":"")+'>'+CATS[k]+'</option>').join("")+'</select>'
     +'<div class="row-between"><div style="flex:1"><label>Room / zone</label><input id="f-room" value="'+esc(c.room||"")+'" placeholder="Kitchen"></div>'
     +'<div style="width:110px"><label>Minutes</label><input id="f-min" type="number" min="0" value="'+(c.minutes||"")+'"></div></div>'
-    +'<label>How often</label><select id="f-cad"><option value="daily"'+(c.cadence==="daily"?" selected":"")+'>Daily</option><option value="weekly"'+(c.cadence==="weekly"?" selected":"")+'>Weekly</option><option value="monthly"'+(c.cadence==="monthly"?" selected":"")+'>Monthly</option><option value="once"'+(c.cadence==="once"?" selected":"")+'>One-time</option></select>'
+    +'<div id="f-cadrow"><label>How often</label><select id="f-cad"><option value="daily"'+(c.cadence==="daily"?" selected":"")+'>Daily</option><option value="weekly"'+(c.cadence==="weekly"?" selected":"")+'>Weekly</option><option value="monthly"'+(c.cadence==="monthly"?" selected":"")+'>Monthly</option><option value="once"'+(c.cadence==="once"?" selected":"")+'>One-time</option></select></div>'
     +'<div id="f-daywrap"><label>Day of week (for Basic Week / weekly)</label><select id="f-day"><option value="">—</option>'+DAY_KEYS.map(k=>'<option value="'+k+'"'+(c.day===k?" selected":"")+'>'+DAY_NAMES[k]+'</option>').join("")+'</select></div>'
     +'<div id="f-duewrap"><label>Do by (one-time tasks)</label><input id="f-due" type="date" value="'+esc(c.dueDate||"")+'"></div>'
     +'<label>Notes</label><textarea id="f-notes" rows="2">'+esc(c.notes||"")+'</textarea>'
@@ -476,12 +511,13 @@ window.editCard=id=>{
 };
 window.saveCardForm=async id=>{
   const preset=window._preset||{}; window._preset=null;
+  const _cat=$("f-cat").value, _todo=_cat==="todo";
   const card=Object.assign({refileUntil:null,doneEver:false},
     preset,
     { id:id||undefined,
-    title:$("f-title").value.trim(), category:$("f-cat").value, room:$("f-room").value.trim(),
-    minutes:+$("f-min").value||0, cadence:$("f-cad").value, day:$("f-day").value||null,
-    dueDate:$("f-due").value||"", notes:$("f-notes").value.trim(), active:true });
+    title:$("f-title").value.trim(), category:_cat, room:$("f-room").value.trim(),
+    minutes:+$("f-min").value||0, cadence:_todo?"once":$("f-cad").value, day:_todo?null:($("f-day").value||null),
+    dueDate:_todo?"":($("f-due").value||""), notes:$("f-notes").value.trim(), active:true });
   if(!card.title){ toast("Give the card a title first."); return; }
   closeModal();
   await saveCard(card).catch(e=>toast("Couldn't save — check connection."));
@@ -558,17 +594,19 @@ function renderWeek(){
 window.addCardForDay=k=>openModalForNew({category:"basicweek",day:k,cadence:"weekly"});
 function openModalForNew(preset){
   window._preset=preset||{};
-  const c=Object.assign({title:"",category:"todo",room:"",minutes:15,cadence:"once",notes:"",day:null,dueDate:"",active:true},preset||{});
+  const defCat=(typeof currentCat!=="undefined"&&currentCat&&currentCat!=="all"&&currentCat!=="todo")?currentCat:"basicweek";
+  const c=Object.assign({title:"",category:defCat,room:"",minutes:15,cadence:"once",notes:"",day:null,dueDate:"",active:true},preset||{});
   openModal('<h2>New card</h2>'
     +'<label>Title</label><input id="f-title" value="'+esc(c.title)+'" placeholder="e.g. Wipe the microwave">'
-    +'<label>Divider (category)</label><select id="f-cat">'+Object.keys(CATS).map(k2=>'<option value="'+k2+'"'+(c.category===k2?" selected":"")+'>'+CATS[k2]+'</option>').join("")+'</select>'
+    +'<label>Divider (category)</label><select id="f-cat" onchange="todoMode(this.value===\'todo\')">'+Object.keys(CATS).map(k2=>'<option value="'+k2+'"'+(c.category===k2?" selected":"")+'>'+CATS[k2]+'</option>').join("")+'</select>'
     +'<div class="row-between"><div style="flex:1"><label>Room / zone</label><input id="f-room" value="'+esc(c.room||"")+'" placeholder="Kitchen"></div>'
     +'<div style="width:110px"><label>Minutes</label><input id="f-min" type="number" min="0" value="'+(c.minutes||"")+'"></div></div>'
-    +'<label>How often</label><select id="f-cad"><option value="daily"'+(c.cadence==="daily"?" selected":"")+'>Daily</option><option value="weekly"'+(c.cadence==="weekly"?" selected":"")+'>Weekly</option><option value="monthly"'+(c.cadence==="monthly"?" selected":"")+'>Monthly</option><option value="once"'+(c.cadence==="once"?" selected":"")+'>One-time</option></select>'
-    +'<label>Day of week (for Basic Week / weekly)</label><select id="f-day"><option value="">—</option>'+DAY_KEYS.map(k2=>'<option value="'+k2+'"'+(c.day===k2?" selected":"")+'>'+DAY_NAMES[k2]+'</option>').join("")+'</select>'
+    +'<div id="f-cadrow"><label>How often</label><select id="f-cad"><option value="daily"'+(c.cadence==="daily"?" selected":"")+'>Daily</option><option value="weekly"'+(c.cadence==="weekly"?" selected":"")+'>Weekly</option><option value="monthly"'+(c.cadence==="monthly"?" selected":"")+'>Monthly</option><option value="once"'+(c.cadence==="once"?" selected":"")+'>One-time</option></select></div>'
+    +'<div id="f-dayrow"><label>Day of week (for Basic Week / weekly)</label><select id="f-day"><option value="">—</option>'+DAY_KEYS.map(k2=>'<option value="'+k2+'"'+(c.day===k2?" selected":"")+'>'+DAY_NAMES[k2]+'</option>').join("")+'</select></div>'
     +'<label>Do by (one-time tasks)</label><input id="f-due" type="date" value="'+esc(c.dueDate||"")+'">'
     +'<label>Notes</label><textarea id="f-notes" rows="2">'+esc(c.notes||"")+'</textarea>'
     +'<div class="btnrow"><button class="btn" onclick="saveCardForm(\'\')">Save card</button><button class="btn ghost" onclick="closeModal()">Cancel</button></div>');
+  todoMode($("f-cat").value==="todo");
   setTimeout(()=>{const el=$("f-title"); if(el) el.focus();},100);
 }
 
@@ -656,7 +694,7 @@ window.goView=name=>{
 };
 document.querySelectorAll("#tabs button").forEach(b=>b.addEventListener("click",()=>goView(b.dataset.view)));
 $("add-card-btn").addEventListener("click",()=>openModalForNew({}));
-$("add-today-btn").addEventListener("click",()=>openModalForNew({refileUntil:todayStr(),cadence:"once"}));
+$("add-today-btn").addEventListener("click",()=>addTodo());
 $("export-btn").addEventListener("click",exportAll);
 $("import-btn").addEventListener("click",()=>$("import-file").click());
 $("import-file").addEventListener("change",e=>{ if(e.target.files[0]) importAll(e.target.files[0]); e.target.value=""; });
@@ -681,7 +719,17 @@ async function boot(){
   $("date-line").textContent=new Date().toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric"});
   await seedIfNeeded().catch(e=>console.warn("seed",e));
   await migrateRoutineCards().catch(e=>console.warn("migrate",e));
+  await migrateTodoCards().catch(e=>console.warn("migrate",e));
   listenAll();
+}
+async function migrateTodoCards(){
+  const s=await col("cards").where("category","==","todo").get().catch(()=>null);
+  if(!s||s.empty) return;
+  const b=db.batch(); let n=0;
+  s.forEach(d=>{ const c=d.data()||{};
+    if(c.day||c.cadence!=="once"||c.dueDate){ n++; b.set(d.ref,{day:null,cadence:"once",dueDate:""},{merge:true}); }
+  });
+  if(n) await b.commit().catch(()=>{});
 }
 async function migrateRoutineCards(){
   const s=await col("cards").where("category","==","routine").get().catch(()=>null);
