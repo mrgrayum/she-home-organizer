@@ -724,6 +724,7 @@ window.catMode=cat=>{
   show("f-duerow", cat==="day");
   lbl("f-daylabel","Day of week");
   lbl("f-ordlabel", cat==="zones" ? "Week of the month" : "Which week");
+  if(cat==="day"){ const due=$("f-due"); if(due&&!due.value) due.value=todayStr(); }
 };
 function ordinalMatch(dom,n){
   const occ=Math.ceil(dom/7);
@@ -757,7 +758,7 @@ window.editCard=id=>{
   if(c.id&&c.category==="todo") return editTodo(id);
   openModal('<h2>'+(c.id?"Edit card":"New card")+'</h2>'
     +'<label>Title</label><input id="f-title" value="'+esc(c.title)+'" placeholder="e.g. Wipe the microwave">'
-    +'<label>Divider (category)</label><select id="f-cat" onchange="catMode(this.value===\'todo\')">'+Object.keys(CATS).filter(k=>k!=="todo").map(k=>'<option value="'+k+'"'+(c.category===k?" selected":"")+'>'+CATS[k]+'</option>').join("")+'</select>'
+    +'<label>Divider (category)</label><select id="f-cat" onchange="catMode(this.value)">'+Object.keys(CATS).filter(k=>k!=="todo").map(k=>'<option value="'+k+'"'+(c.category===k?" selected":"")+'>'+CATS[k]+'</option>').join("")+'</select>'
     +(fam().length?'<label>Belongs to</label><select id="f-who">'+whoOptions(c.who)+'</select>':"")
     +'<div class="row-between"><div style="flex:1"><label>Room / zone</label><input id="f-room" value="'+esc(c.room||"")+'" placeholder="Kitchen"></div>'
     +'<div style="width:110px"><label>Minutes</label><input id="f-min" type="number" min="0" value="'+(c.minutes||"")+'"></div></div>'
@@ -936,7 +937,7 @@ function openModalForNew(preset){
   const c=Object.assign({title:"",category:defCat,room:"",minutes:15,cadence:"once",notes:"",day:null,dueDate:"",monthWeek:null,active:true},preset||{}); if(c.category==="day"&&!c.dueDate) c.dueDate=todayStr();
   openModal('<h2>New card</h2>'
     +'<label>Title</label><input id="f-title" value="'+esc(c.title)+'" placeholder="e.g. Wipe the microwave">'
-    +'<label>Divider (category)</label><select id="f-cat" onchange="catMode(this.value===\'todo\')">'+Object.keys(CATS).filter(k2=>k2!=="todo").map(k2=>'<option value="'+k2+'"'+(c.category===k2?" selected":"")+'>'+CATS[k2]+'</option>').join("")+'</select>'
+    +'<label>Divider (category)</label><select id="f-cat" onchange="catMode(this.value)">'+Object.keys(CATS).filter(k2=>k2!=="todo").map(k2=>'<option value="'+k2+'"'+(c.category===k2?" selected":"")+'>'+CATS[k2]+'</option>').join("")+'</select>'
     +(fam().length?'<label>Belongs to</label><select id="f-who">'+whoOptions(c.who)+'</select>':"")
     +'<div class="row-between"><div style="flex:1"><label>Room / zone</label><input id="f-room" value="'+esc(c.room||"")+'" placeholder="Kitchen"></div>'
     +'<div style="width:110px"><label>Minutes</label><input id="f-min" type="number" min="0" value="'+(c.minutes||"")+'"></div></div>'
