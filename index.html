@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Home Task Organizer — Sidetracked Home Executives</title>
+<meta name="description" content="A household task organizer built on the Sidetracked Home Executives card-file system.">
+<style>
+:root{
+  --paper:#faf5ec; --card:#fffdf8; --ink:#3d3429; --ink-soft:#7a6f60;
+  --line:#e7dcc8; --terra:#c96f4a; --terra-dark:#a8552f; --sage:#5b8a72;
+  --sage-dark:#476e5b; --gold:#d9a441; --blush:#f6e3d3; --danger:#b0523c;
+  --radius:14px; --shadow:0 2px 10px rgba(61,52,41,.08);
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{margin:0; padding:0;}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  background:var(--paper); color:var(--ink); line-height:1.45;
+  padding-bottom:calc(84px + env(safe-area-inset-bottom));
+}
+h1,h2,h3{font-family:Georgia,"Times New Roman",serif; margin:.4em 0;}
+button{font:inherit; cursor:pointer;}
+input,select,textarea{font:inherit; width:100%; padding:.6rem .7rem; border:1.5px solid var(--line);
+  border-radius:10px; background:#fff; color:var(--ink);}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--terra); border-color:var(--terra);}
+label{font-size:.85rem; font-weight:600; color:var(--ink-soft); display:block; margin:.7rem 0 .25rem;}
+.wrap{max-width:640px; margin:0 auto; padding:1rem 1rem 2rem;}
+.topbar{position:sticky; top:0; z-index:20; background:linear-gradient(var(--paper) 88%, transparent);
+  padding:.8rem 1rem .6rem; max-width:640px; margin:0 auto;}
+.topbar h1{font-size:1.35rem; margin:0; display:flex; align-items:center; gap:.5rem;}
+.topbar .sub{font-size:.8rem; color:var(--ink-soft);}
+.card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
+  box-shadow:var(--shadow); padding:1rem; margin:.8rem 0; position:relative;}
+.card.focus{border:2px solid var(--terra); background:
+  repeating-linear-gradient(#fffdf8,#fffdf8 30px,#fbf6ea 30px,#fbf6ea 31px);}
+.card .meta{font-size:.8rem; color:var(--ink-soft); margin:.25rem 0 .6rem;}
+.pill{display:inline-block; font-size:.72rem; font-weight:700; padding:.15rem .55rem; border-radius:999px;
+  background:var(--blush); color:var(--terra-dark); margin-right:.3rem; text-transform:uppercase; letter-spacing:.04em;}
+.pill.sage{background:#ddebe2; color:var(--sage-dark);}
+.pill.gold{background:#f7ecd4; color:#8a6a1f;}
+.btn{display:inline-block; border:none; border-radius:12px; padding:.7rem 1.1rem; font-weight:700;
+  background:var(--terra); color:#fff; box-shadow:var(--shadow);}
+.btn:active{transform:scale(.98);}
+.btn.secondary{background:#fff; color:var(--terra-dark); border:1.5px solid var(--terra);}
+.btn.sage{background:var(--sage);}
+.btn.ghost{background:transparent; color:var(--ink-soft); box-shadow:none; border:1px dashed var(--line);}
+.btn.small{padding:.45rem .8rem; font-size:.85rem;}
+.btnrow{display:flex; gap:.6rem; flex-wrap:wrap; margin-top:.8rem;}
+.btnrow .btn{flex:1 1 auto; text-align:center;}
+.addbar{position:sticky; bottom:calc(76px + env(safe-area-inset-bottom)); z-index:15; max-width:640px; margin:0 auto; padding:.4rem 1rem;}
+.addbar .btn{width:100%; font-size:1.05rem; padding:.85rem;}
+.tabs{position:fixed; bottom:0; left:0; right:0; z-index:30; display:flex;
+  background:#fffdf8; border-top:1px solid var(--line);
+  padding:.4rem .2rem calc(.4rem + env(safe-area-inset-bottom));}
+.tabs button{flex:1; border:none; background:none; color:var(--ink-soft); font-size:.68rem; font-weight:600;
+  padding:.35rem 0; display:flex; flex-direction:column; align-items:center; gap:2px;}
+.tabs button .ico{font-size:1.25rem;}
+.tabs button.active{color:var(--terra-dark);}
+.view{display:none;} .view.active{display:block;}
+.taskrow{display:flex; align-items:center; gap:.7rem; padding:.65rem .2rem; border-bottom:1px dashed var(--line);}
+.taskrow:last-child{border-bottom:none;}
+.check{width:26px; height:26px; border-radius:50%; border:2px solid var(--sage); background:#fff; flex:none;
+  display:flex; align-items:center; justify-content:center; font-size:1rem; color:#fff; padding:0;}
+.check.done{background:var(--sage); border-color:var(--sage);}
+.taskrow .tt{flex:1;}
+.taskrow.done .tt{color:var(--ink-soft); text-decoration:line-through;}
+.minutes{font-size:.78rem; color:var(--ink-soft); white-space:nowrap;}
+.ringwrap{display:flex; align-items:center; gap:1rem;}
+.ring{width:86px; height:86px; flex:none;}
+.ring .bg{stroke:var(--line);} .ring .fg{stroke:var(--sage); stroke-linecap:round; transition:stroke-dashoffset .5s;}
+.ring text{font-size:1.05rem; font-weight:800; fill:var(--ink);}
+.catbar{display:flex; gap:.45rem; overflow-x:auto; padding:.3rem 0 .7rem; -webkit-overflow-scrolling:touch;}
+.catbar button{flex:none; border:1.5px solid var(--line); background:#fff; border-radius:999px; padding:.4rem .9rem;
+  font-size:.82rem; font-weight:600; color:var(--ink-soft);}
+.catbar button.active{background:var(--ink); color:#fff; border-color:var(--ink);}
+.kicker{font-size:.78rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--terra-dark); margin:1.1rem 0 .2rem;}
+.empty{color:var(--ink-soft); font-style:italic; padding:1rem; text-align:center;}
+.starter-note{background:#f7ecd4; border:1px solid #e8d5a8; border-radius:10px; padding:.6rem .8rem; font-size:.82rem; margin:.6rem 0;}
+.modal-bg{position:fixed; inset:0; background:rgba(61,52,41,.45); z-index:50; display:none; align-items:flex-end; justify-content:center;}
+.modal-bg.open{display:flex;}
+.modal{background:var(--card); border-radius:18px 18px 0 0; width:100%; max-width:640px; max-height:88vh; overflow:auto; padding:1.2rem 1.2rem 2rem;}
+.modal h2{margin-top:0;}
+.toast{position:fixed; left:50%; transform:translateX(-50%); bottom:calc(96px + env(safe-area-inset-bottom));
+  background:var(--ink); color:#fff; padding:.7rem 1.2rem; border-radius:999px; z-index:60; display:none; font-size:.9rem;}
+.toast.show{display:block;}
+.daygrid{display:grid; grid-template-columns:repeat(7,1fr); gap:.35rem; margin:.6rem 0;}
+.daygrid button{border:1.5px solid var(--line); background:#fff; border-radius:10px; padding:.5rem .1rem; font-size:.72rem; font-weight:700;}
+.daygrid button.sel{background:var(--terra); color:#fff; border-color:var(--terra);}
+.weekday-card{margin:.6rem 0;}
+.setup-screen{max-width:560px; margin:2rem auto; padding:1.5rem;}
+.setup-screen ol{padding-left:1.3rem;} .setup-screen li{margin:.5rem 0;}
+code.cfg{background:#f1e9d8; padding:.15rem .4rem; border-radius:6px; font-size:.85em;}
+.hidden{display:none !important;}
+.row-between{display:flex; justify-content:space-between; align-items:center; gap:.6rem;}
+.iconbtn{border:none; background:none; font-size:1.1rem; padding:.3rem .45rem; color:var(--ink-soft);}
+.progress-note{font-size:.9rem; color:var(--ink-soft);}
+.streak{font-size:2rem; font-weight:800; color:var(--terra-dark);}
+</style>
+</head>
+<body>
+<div id="setup-screen" class="setup-screen hidden">
+  <div class="card">
+    <h2>👋 Almost ready!</h2>
+    <p>This organizer isn't connected to its database yet. It takes about five minutes — open <b>SETUP.md</b> (it came with this file) and follow the numbered steps:</p>
+    <ol>
+      <li>Use your existing Firebase project (or create one).</li>
+      <li>Add a Web app and copy the config values into the <code class="cfg">FIREBASE_CONFIG</code> spot at the top of this file's script.</li>
+      <li>Turn on <b>Anonymous</b> sign-in.</li>
+      <li>Create a Firestore database and paste in the provided security rules.</li>
+      <li>Reload this page.</li>
+    </ol>
+    <p class="progress-note">Your tasks will sync privately to your own Firebase project — nobody else can see them.</p>
+  </div>
+</div>
+
+<div id="app" class="hidden">
+  <div class="topbar">
+    <h1>🗂️ Home Task Organizer</h1>
+    <div class="sub" id="date-line"></div>
+  </div>
+  <div class="wrap">
+
+    <!-- TODAY -->
+    <section id="view-today" class="view active">
+      <div class="kicker">Up next</div>
+      <div id="focus-slot"></div>
+      <div class="kicker">On deck <span id="ondeck-count" class="progress-note"></span></div>
+      <div id="ondeck-list" class="card"></div>
+      <div class="card">
+        <div class="ringwrap">
+          <svg class="ring" viewBox="0 0 100 100">
+            <circle class="bg" cx="50" cy="50" r="42" fill="none" stroke-width="10"/>
+            <circle class="fg" id="ring-fg" cx="50" cy="50" r="42" fill="none" stroke-width="10"
+              stroke-dasharray="263.9" stroke-dashoffset="263.9" transform="rotate(-90 50 50)"/>
+            <text x="50" y="56" text-anchor="middle" id="ring-text">0%</text>
+          </svg>
+          <div>
+            <div id="minutes-line" style="font-weight:700;"></div>
+            <div class="progress-note" id="encourage-line"></div>
+          </div>
+        </div>
+      </div>
+      <div class="kicker">Routines today</div>
+      <div id="routines-today"></div>
+      <div class="addbar"><button class="btn" id="add-today-btn">＋ Add a task for today</button></div>
+    </section>
+
+    <!-- CARD BOX -->
+    <section id="view-cards" class="view">
+      <div class="kicker">The card box</div>
+      <p class="progress-note">Your digital 3×5 file. Everything lives on a card — browse by divider, tap to edit.</p>
+      <div class="catbar" id="catbar"></div>
+      <div id="cardbox-list"></div>
+      <div class="addbar"><button class="btn" id="add-card-btn">＋ Add a card</button></div>
+    </section>
+
+    <!-- ROUTINES -->
+    <section id="view-routines" class="view">
+      <div class="kicker">Routines</div>
+      <p class="progress-note">Small, repeatable, done-before-you-think-about-it. They reset fresh every morning — yesterday is forgiven.</p>
+      <div id="routines-list"></div>
+    </section>
+
+    <!-- WEEK -->
+    <section id="view-week" class="view">
+      <div class="kicker">The Basic Week</div>
+      <p class="progress-note">One focus per day keeps the whole house covered without a single marathon cleaning day. Tap a day to see and edit its cards.</p>
+      <div id="week-list"></div>
+    </section>
+
+    <!-- PROGRESS -->
+    <section id="view-progress" class="view">
+      <div class="kicker">Progress</div>
+      <div class="card"><div class="row-between">
+        <div><div class="streak" id="streak-num">0</div><div class="progress-note">day routine streak</div></div>
+        <div style="text-align:right"><div class="streak" id="weekdone-num">0</div><div class="progress-note">cards done this week</div></div>
+      </div></div>
+      <div class="card"><h3>A gentle note</h3><p class="progress-note" id="progress-note"></p></div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section id="view-settings" class="view">
+      <div class="kicker">Settings</div>
+      <div class="card">
+        <h3>Backup — your safety net</h3>
+        <p class="progress-note">Everything syncs to your private database, but a backup file is good housekeeping. Save one now and then.</p>
+        <div class="btnrow">
+          <button class="btn sage small" id="export-btn">⬇ Export backup</button>
+          <button class="btn secondary small" id="import-btn">⬆ Import backup</button>
+          <input type="file" id="import-file" accept="application/json" class="hidden">
+        </div>
+      </div>
+      <div class="card">
+        <h3>Fresh starts</h3>
+        <div class="btnrow">
+          <button class="btn ghost small" id="reseed-btn">Restore starter cards</button>
+          <button class="btn ghost small" id="wipe-btn" style="color:var(--danger); border-color:var(--danger);">Erase everything</button>
+        </div>
+      </div>
+      <div class="card">
+        <h3>About this system</h3>
+        <p class="progress-note">Built on <i>Sidetracked Home Executives: From Pigpen to Paradise</i> by Pam Young &amp; Peggy Jones — the 3×5 card-file system: a daily routine, a Basic Week, zone cards, and menus. The whole philosophy: <b>done is better than perfect</b>. Refile a card without guilt — you're not messy, you're sidetracked.</p>
+      </div>
+    </section>
+  </div>
+
+  <nav class="tabs" id="tabs">
+    <button data-view="today" class="active"><span class="ico">☀️</span>Today</button>
+    <button data-view="cards"><span class="ico">🗂️</span>Cards</button>
+    <button data-view="routines"><span class="ico">🔁</span>Routines</button>
+    <button data-view="week"><span class="ico">📅</span>Week</button>
+    <button data-view="progress"><span class="ico">🌱</span>Progress</button>
+    <button data-view="settings"><span class="ico">⚙️</span>Settings</button>
+  </nav>
+</div>
+
+<div class="modal-bg" id="modal-bg"><div class="modal" id="modal"></div></div>
+<div class="toast" id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+"use strict";
+/* =====================================================================
+   FIREBASE_CONFIG — Matt, paste your web app's config here.
+   Firebase console → (gear icon) Project settings → "Your apps" →
+   your Web app → "SDK setup and configuration" → copy the
+   firebaseConfig object values into the fields below.
+   ===================================================================== */
+const FIREBASE_CONFIG = {
+  apiKey: "PASTE_YOUR_API_KEY_HERE",
+  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "PASTE_YOUR_SENDER_ID",
+  appId: "PASTE_YOUR_APP_ID"
+};
+const FIREBASE_READY = FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey.indexOf("PASTE") !== 0;
+
+/* ---------------- helpers ---------------- */
+const $ = id => document.getElementById(id);
+const DAY_KEYS = ["sun","mon","tue","wed","thu","fri","sat"];
+const DAY_NAMES = {sun:"Sunday",mon:"Monday",tue:"Tuesday",wed:"Wednesday",thu:"Thursday",fri:"Friday",sat:"Saturday"};
+const CATS = {routine:"Daily Routine", basicweek:"Basic Week", monthly:"Monthly", zones:"Zones", menus:"Menus", todo:"To Do"};
+function todayStr(d){ d=d||new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function addDaysStr(base,n){ const d=new Date(base+"T12:00:00"); d.setDate(d.getDate()+n); return todayStr(d); }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function uid(){ return "c"+Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
+function toast(msg){ const t=$("toast"); t.textContent=msg; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),2200); }
+function closeModal(){ window._preset=null; $("modal-bg").classList.remove("open"); }
+$("modal-bg").addEventListener("click", e=>{ if(e.target===$("modal-bg")) closeModal(); });
+function openModal(html){ $("modal").innerHTML=html; $("modal-bg").classList.add("open"); }
+
+/* ---------------- firebase ---------------- */
+let db=null, U=null, unsubs=[];
+if(!FIREBASE_READY){
+  $("setup-screen").classList.remove("hidden");
+}else{
+  firebase.initializeApp(FIREBASE_CONFIG);
+  db = firebase.firestore();
+  const note = document.createElement("div");
+  db.enablePersistence({synchronizeTabs:true}).catch(err=>{
+    console.warn("Offline persistence unavailable:", err && err.code);
+  }).finally(startAuth);
+  function startAuth(){
+    firebase.auth().onAuthStateChanged(user=>{
+      if(user){ U=user; boot(); }
+      else firebase.auth().signInAnonymously().catch(e=>{
+        document.body.innerHTML='<div class="setup-screen"><div class="card"><h2>Couldn\'t sign in</h2><p>Anonymous sign-in needs to be enabled: Firebase console → Build → Authentication → Sign-in method → enable <b>Anonymous</b>. Then reload.</p></div></div>';
+      });
+    });
+  }
+}
+
+/* ---------------- data layer ---------------- */
+let cards=[], routines={}, dayDoc=null, settingsDoc=null, currentCat="all";
+const col = name => db.collection("users").doc(U.uid).collection(name);
+const dayRef = () => col("days").doc(todayStr());
+
+function listenAll(){
+  unsubs.forEach(u=>u()); unsubs=[];
+  unsubs.push(col("cards").onSnapshot(s=>{ cards=s.docs.map(d=>Object.assign({id:d.id},d.data())); render(); }));
+  unsubs.push(col("routines").onSnapshot(s=>{ routines={}; s.docs.forEach(d=>routines[d.id]=Object.assign({id:d.id},d.data())); render(); }));
+  unsubs.push(dayRef().onSnapshot(s=>{ dayDoc=s.exists?Object.assign({id:s.id},s.data()):{id:todayStr(),done:{},refiles:{},routines:{}}; render(); }));
+  unsubs.push(col("settings").doc("main").onSnapshot(s=>{ settingsDoc=s.exists?s.data():null; render(); }));
+}
+async function saveCard(card){
+  const data=Object.assign({},card); delete data.id;
+  if(card.id) await col("cards").doc(card.id).set(data,{merge:true});
+  else await col("cards").add(Object.assign({active:true,createdAt:firebase.firestore.FieldValue.serverTimestamp()},data));
+}
+async function deleteCard(id){ if(confirm("Delete this card?")) await col("cards").doc(id).delete(); }
+async function markDone(id){
+  const t=todayStr();
+  await dayRef().set({done:Object.assign({},(dayDoc&&dayDoc.done)||{},{[id]:true})},{merge:true});
+  const c=cards.find(c=>c.id===id);
+  if(c && c.cadence==="once") await col("cards").doc(id).set({doneEver:true},{merge:true});
+  toast("Done! Nice work. 🎉");
+}
+async function refileCard(id, when){
+  const t=todayStr();
+  let target = when==="tomorrow" ? addDaysStr(t,1) : when==="week" ? addDaysStr(t,3) : addDaysStr(t,7);
+  await col("cards").doc(id).set({refileUntil:target},{merge:true});
+  toast(when==="tomorrow" ? "Filed for tomorrow — no guilt. 💛" : "Refiled. It'll resurface on its own. 💛");
+}
+async function toggleRoutineItem(rid, itemId){
+  const t=todayStr(); const cur=((dayDoc&&dayDoc.routines)||{})[rid]||[];
+  const next = cur.includes(itemId) ? cur.filter(i=>i!==itemId) : cur.concat(itemId);
+  await dayRef().set({routines:Object.assign({},(dayDoc&&dayDoc.routines)||{},{[rid]:next})},{merge:true});
+}
+async function saveRoutine(rid, routine){
+  const data=Object.assign({},routine); delete data.id;
+  await col("routines").doc(rid).set(data,{merge:true});
+}
+
+/* ---------------- starter content (SHE) ---------------- */
+function starterCards(){
+  const C=(title,category,room,minutes,cadence,notes,day)=>({title,category,room,minutes,cadence,notes:notes||"",day:day||null,active:true,refileUntil:null,doneEver:false,starter:true});
+  return [
+    C("Make the beds","routine","Bedrooms",5,"daily","Straighten covers and pillows — good enough is perfect."),
+    C("Get dressed to the shoes","routine","Bedroom",5,"daily","The SHE classic: dressed for the day changes the whole day."),
+    C("Swish & swipe the bathroom","routine","Bathrooms",5,"daily","Quick swish of the toilet, swipe of the sink."),
+    C("Start a load of laundry","routine","Laundry",3,"daily","One load a day keeps the mountain away."),
+    C("15-minute room rescue","routine","Living areas",15,"daily","Set a timer, rescue the most-lived-in room, stop when it dings."),
+    C("Shine the kitchen sink","routine","Kitchen",3,"daily","End-of-day signal that the kitchen is closed."),
+    C("Weekly home blessing","basicweek","","45","weekly","Top-to-bottom quick blessing of the whole house.","mon"),
+    C("Bathrooms day","basicweek","Bathrooms",30,"weekly","Toilets, sinks, mirrors, floors.","tue"),
+    C("Bedrooms & linens","basicweek","Bedrooms",30,"weekly","Sheets, dusting, floors.","wed"),
+    C("Kitchen detail","basicweek","Kitchen",30,"weekly","Appliances, pantry wipe, mop.","thu"),
+    C("Menu plan + grocery list","basicweek","Kitchen",20,"weekly","Plan 5–7 dinners, list once.","fri"),
+    C("Errands","basicweek","",40,"weekly","Bank, post office, odds and ends.","fri"),
+    C("Catch-up day","basicweek","",30,"weekly","Whatever got refilled during the week.","sat"),
+    C("Change HVAC filter","monthly","Whole house",10,"monthly","First of the month."),
+    C("Wipe baseboards — living areas","zones","Living areas",20,"monthly","Zone work: one room deep-clean at a time."),
+    C("Declutter one drawer","zones","Bedrooms",15,"monthly","One drawer, one bag, done."),
+    C("Clean out the fridge","zones","Kitchen",25,"monthly","Toss expired, wipe shelves."),
+    C("This week's dinners","menus","Kitchen",0,"weekly","Write the plan on this card, shop once."),
+    C("Replace kitchen sponge","todo","Kitchen",2,"once",""),
+    C("Water the houseplants","todo","Living areas",10,"weekly","")
+  ];
+}
+function starterRoutines(){
+  const items=a=>a.map(t=>({id:uid(),text:t}));
+  return {
+    morning:{title:"Morning routine",items:items(["Make the beds","Get dressed to the shoes","Swish & swipe bathroom","Start a load of laundry","Check today's cards"])},
+    evening:{title:"Evening routine",items:items(["Shine the kitchen sink","15-minute room rescue","Lay out tomorrow's clothes","Glance at tomorrow's cards"])}
+  };
+}
+async function seedIfNeeded(){
+  const s=await col("settings").doc("main").get();
+  if(s.exists && s.data().seeded) return;
+  const batch=db.batch();
+  starterCards().forEach(c=>batch.set(col("cards").doc(),Object.assign({createdAt:firebase.firestore.FieldValue.serverTimestamp()},c)));
+  const r=starterRoutines();
+  batch.set(col("routines").doc("morning"),r.morning);
+  batch.set(col("routines").doc("evening"),r.evening);
+  batch.set(col("settings").doc("main"),{seeded:true,seededAt:firebase.firestore.FieldValue.serverTimestamp()});
+  await batch.commit();
+}
+
+/* ---------------- derived state ---------------- */
+function doneMap(){ return (dayDoc&&dayDoc.done)||{}; }
+function isDoneToday(c){ return !!doneMap()[c.id]; }
+function onDeck(){
+  const t=todayStr(), wd=DAY_KEYS[new Date().getDay()], dom=new Date().getDate();
+  return cards.filter(c=>{
+    if(!c.active || isDoneToday(c)) return false;
+    if(c.refileUntil && c.refileUntil>t) return false;
+    if(c.refileUntil && c.refileUntil<=t) return true;
+    if(c.cadence==="daily") return true;
+    if(c.day===wd) return true;
+    if(c.cadence==="monthly" && dom===1) return true;
+    if(c.cadence==="once" && !c.doneEver && c.dueDate && c.dueDate<=t) return true;
+    return false;
+  }).sort((a,b)=>(a.minutes||0)-(b.minutes||0));
+}
+function cardMeta(c){
+  const bits=[];
+  if(c.room) bits.push(c.room);
+  bits.push(CATS[c.category]||c.category);
+  if(c.cadence==="once") bits.push("One-time"); else bits.push(c.cadence[0].toUpperCase()+c.cadence.slice(1));
+  if(c.minutes) bits.push(c.minutes+" min");
+  return bits.join(" · ");
+}
+function pillFor(c){
+  if(c.category==="routine") return '<span class="pill sage">Routine</span>';
+  if(c.category==="basicweek") return '<span class="pill">Week</span>';
+  if(c.category==="todo") return '<span class="pill gold">To do</span>';
+  return '<span class="pill">'+esc(CATS[c.category]||c.category)+'</span>';
+}
+
+/* ---------------- TODAY ---------------- */
+function renderToday(){
+  const deck=onDeck(), focus=deck[0];
+  const fs=$("focus-slot");
+  if(!focus){
+    fs.innerHTML='<div class="card"><h3>All clear! 🎉</h3><p class="progress-note">The deck is empty. Enjoy the rest of your day — or pull a card from the box if you\'re feeling ambitious.</p><div class="btnrow"><button class="btn secondary small" onclick="goView(\'cards\')">Browse the card box</button></div></div>';
+  }else{
+    fs.innerHTML='<div class="card focus"><div class="kicker" style="margin-top:0">Up next</div>'
+      +pillFor(focus)+'<h2 style="margin:.3rem 0">'+esc(focus.title)+'</h2>'
+      +'<div class="meta">'+esc(cardMeta(focus))+'</div>'
+      +(focus.notes?'<p>'+esc(focus.notes)+'</p>':"")
+      +'<div class="btnrow"><button class="btn" onclick="doDone(\''+focus.id+'\')">✓ Done</button>'
+      +'<button class="btn secondary" onclick="doRefile(\''+focus.id+'\')">Refile ↪</button></div></div>';
+  }
+  $("ondeck-count").textContent = deck.length? "("+deck.length+" card"+(deck.length>1?"s":"")+")":"";
+  const rest=deck.slice(1);
+  $("ondeck-list").innerHTML = rest.length
+    ? rest.map(c=>'<div class="taskrow'+(isDoneToday(c)?" done":"")+'">'
+      +'<button class="check'+(isDoneToday(c)?" done":"")+'" onclick="doDone(\''+c.id+'\')">'+(isDoneToday(c)?"✓":"")+'</button>'
+      +'<div class="tt"><b>'+esc(c.title)+'</b><div class="progress-note">'+esc(cardMeta(c))+'</div></div>'
+      +'<span class="minutes">'+(c.minutes?c.minutes+"m":"")+'</span></div>').join("")
+    : '<div class="empty">Nothing else on deck.</div>';
+  const total=deck.reduce((s,c)=>s+(+c.minutes||0),0);
+  const doneM=deck.filter(isDoneToday).reduce((s,c)=>s+(+c.minutes||0),0);
+  const pct=deck.length?Math.round(deck.filter(isDoneToday).length/deck.length*100):100;
+  $("ring-fg").style.strokeDashoffset=(263.9*(1-pct/100)).toFixed(1);
+  $("ring-text").textContent=pct+"%";
+  $("minutes-line").textContent=doneM+" of "+total+" minutes";
+  const msgs=["Every card you finish is a gift to future-you. 💛","Slow and steady — the tortoise had a tidy house.","Done is better than perfect. Always.","Look at you go. The SHE would be proud."];
+  $("encourage-line").textContent=msgs[Math.min(deck.filter(isDoneToday).length,3)];
+  // routines snapshot
+  const rids=Object.keys(routines);
+  $("routines-today").innerHTML = rids.length ? rids.map(rid=>{
+    const r=routines[rid], checks=(((dayDoc&&dayDoc.routines)||{})[rid])||[];
+    const nd=r.items.filter(i=>!checks.includes(i.id)).length;
+    return '<div class="card"><div class="row-between"><div><b>'+esc(r.title)+'</b><div class="progress-note">'+(nd?nd+" step"+(nd>1?"s":"")+" left":"All done ✨")+'</div></div>'
+      +'<button class="btn sage small" onclick="goView(\'routines\')">Open</button></div></div>';
+  }).join("") : '<div class="card"><div class="empty">No routines yet.</div></div>';
+}
+window.doDone=id=>markDone(id).then(render).catch(e=>toast("Couldn't save — check connection."));
+window.doRefile=id=>{
+  openModal('<h2>Refile this card</h2><p class="progress-note">No guilt — filing it away is the system working as designed.</p>'
+    +'<div class="btnrow" style="flex-direction:column">'
+    +'<button class="btn" onclick="doRefileGo(\''+id+'\',\'tomorrow\')">Tomorrow\'s stack</button>'
+    +'<button class="btn secondary" onclick="doRefileGo(\''+id+'\',\'week\')">Later this week</button>'
+    +'<button class="btn secondary" onclick="doRefileGo(\''+id+'\',\'nextweek\')">Next week</button>'
+    +'<button class="btn ghost" onclick="closeModal()">Keep it here</button></div>');
+};
+window.doRefileGo=(id,when)=>{ closeModal(); refileCard(id,when).then(render).catch(e=>toast("Couldn't save — check connection.")); };
+
+/* ---------------- CARD BOX ---------------- */
+function renderCatbar(){
+  const cats=[["all","All"]].concat(Object.keys(CATS).map(k=>[k,CATS[k]]));
+  $("catbar").innerHTML=cats.map(([k,n])=>'<button class="'+(currentCat===k?"active":"")+'" onclick="setCat(\''+k+'\')">'+n+'</button>').join("");
+}
+window.setCat=k=>{ currentCat=k; render(); };
+function renderCardBox(){
+  renderCatbar();
+  const list=cards.filter(c=>currentCat==="all"||c.category===currentCat)
+    .sort((a,b)=>(a.category||"").localeCompare(b.category||"")||(a.title||"").localeCompare(b.title||""));
+  $("cardbox-list").innerHTML = list.length ? list.map(c=>
+    '<div class="card"><div class="row-between"><div>'+pillFor(c)+'<div style="font-weight:700;margin-top:.25rem">'+esc(c.title)+'</div>'
+    +'<div class="meta">'+esc(cardMeta(c))+'</div>'
+    +(c.notes?'<div class="progress-note">'+esc(c.notes)+'</div>':"")
+    +(c.starter?'<div class="progress-note" style="font-style:italic">Starter card — make it yours or delete it.</div>':"")
+    +'</div><div><button class="iconbtn" onclick="editCard(\''+c.id+'\')" title="Edit">✏️</button></div></div></div>'
+  ).join("") : '<div class="card"><div class="empty">No cards in this divider yet. Add one below!</div></div>';
+}
+window.editCard=id=>{
+  const c=cards.find(x=>x.id===id)||{title:"",category:currentCat==="all"?"todo":currentCat,room:"",minutes:15,cadence:"once",notes:"",day:null,dueDate:"",active:true};
+  openModal('<h2>'+(c.id?"Edit card":"New card")+'</h2>'
+    +'<label>Title</label><input id="f-title" value="'+esc(c.title)+'" placeholder="e.g. Wipe the microwave">'
+    +'<label>Divider (category)</label><select id="f-cat">'+Object.keys(CATS).map(k=>'<option value="'+k+'"'+(c.category===k?" selected":"")+'>'+CATS[k]+'</option>').join("")+'</select>'
+    +'<div class="row-between"><div style="flex:1"><label>Room / zone</label><input id="f-room" value="'+esc(c.room||"")+'" placeholder="Kitchen"></div>'
+    +'<div style="width:110px"><label>Minutes</label><input id="f-min" type="number" min="0" value="'+(c.minutes||"")+'"></div></div>'
+    +'<label>How often</label><select id="f-cad"><option value="daily"'+(c.cadence==="daily"?" selected":"")+'>Daily</option><option value="weekly"'+(c.cadence==="weekly"?" selected":"")+'>Weekly</option><option value="monthly"'+(c.cadence==="monthly"?" selected":"")+'>Monthly</option><option value="once"'+(c.cadence==="once"?" selected":"")+'>One-time</option></select>'
+    +'<div id="f-daywrap"><label>Day of week (for Basic Week / weekly)</label><select id="f-day"><option value="">—</option>'+DAY_KEYS.map(k=>'<option value="'+k+'"'+(c.day===k?" selected":"")+'>'+DAY_NAMES[k]+'</option>').join("")+'</select></div>'
+    +'<div id="f-duewrap"><label>Do by (one-time tasks)</label><input id="f-due" type="date" value="'+esc(c.dueDate||"")+'"></div>'
+    +'<label>Notes</label><textarea id="f-notes" rows="2">'+esc(c.notes||"")+'</textarea>'
+    +'<div class="btnrow"><button class="btn" onclick="saveCardForm(\''+(c.id||"")+'\')">Save card</button>'
+    +(c.id?'<button class="btn ghost" onclick="delCard(\''+c.id+'\')">Delete</button>':"")
+    +'<button class="btn ghost" onclick="closeModal()">Cancel</button></div>');
+};
+window.saveCardForm=async id=>{
+  const preset=window._preset||{}; window._preset=null;
+  const card=Object.assign({refileUntil:null,doneEver:false},
+    preset,
+    { id:id||undefined,
+    title:$("f-title").value.trim(), category:$("f-cat").value, room:$("f-room").value.trim(),
+    minutes:+$("f-min").value||0, cadence:$("f-cad").value, day:$("f-day").value||null,
+    dueDate:$("f-due").value||"", notes:$("f-notes").value.trim(), active:true });
+  if(!card.title){ toast("Give the card a title first."); return; }
+  closeModal();
+  await saveCard(card).catch(e=>toast("Couldn't save — check connection."));
+  toast("Card filed. 🗂️");
+};
+window.delCard=id=>{ closeModal(); deleteCard(id).then(render); };
+
+/* ---------------- ROUTINES ---------------- */
+function renderRoutines(){
+  const rids=Object.keys(routines);
+  $("routines-list").innerHTML = rids.length ? rids.map(rid=>{
+    const r=routines[rid], checks=(((dayDoc&&dayDoc.routines)||{})[rid])||[];
+    return '<div class="card"><div class="row-between"><h3 style="margin:0">'+esc(r.title)+'</h3>'
+      +'<button class="iconbtn" onclick="editRoutine(\''+rid+'\')" title="Edit routine">✏️</button></div>'
+      +r.items.map(it=>'<div class="taskrow'+(checks.includes(it.id)?" done":"")+'">'
+        +'<button class="check'+(checks.includes(it.id)?" done":"")+'" onclick="togRoutine(\''+rid+'\',\''+it.id+'\')">'+(checks.includes(it.id)?"✓":"")+'</button>'
+        +'<div class="tt">'+esc(it.text)+'</div></div>').join("")
+      +'<div class="btnrow"><button class="btn secondary small" onclick="addRoutineItem(\''+rid+'\')">＋ Add a step</button></div></div>';
+  }).join("") : '<div class="card"><div class="empty">No routines yet.</div><div class="btnrow"><button class="btn" onclick="addRoutine()">＋ Create a routine</button></div></div>'
+  + (rids.length? '<div class="addbar"><button class="btn" onclick="addRoutine()">＋ New routine</button></div>':"");
+}
+window.togRoutine=(rid,iid)=>toggleRoutineItem(rid,iid).then(render).catch(e=>toast("Couldn't save — check connection."));
+window.addRoutineItem=rid=>{
+  openModal('<h2>Add a step</h2><label>Step</label><input id="f-ritem" placeholder="e.g. Feed the pets">'
+    +'<div class="btnrow"><button class="btn" onclick="saveRoutineItem(\''+rid+'\')">Add step</button><button class="btn ghost" onclick="closeModal()">Cancel</button></div>');
+  setTimeout(()=>$("f-ritem").focus(),100);
+};
+window.saveRoutineItem=async rid=>{
+  const t=$("f-ritem").value.trim(); if(!t){ toast("Write the step first."); return; }
+  const r=Object.assign({},routines[rid]); r.items=r.items.concat({id:uid(),text:t});
+  closeModal(); await saveRoutine(rid,r).catch(e=>toast("Couldn't save — check connection."));
+};
+window.editRoutine=rid=>{
+  const r=routines[rid];
+  openModal('<h2>Edit routine</h2><label>Routine name</label><input id="f-rname" value="'+esc(r.title)+'">'
+    +'<label>Steps (one per line — unchecked order is kept)</label><textarea id="f-ritems" rows="6">'+esc(r.items.map(i=>i.text).join("\n"))+'</textarea>'
+    +'<div class="btnrow"><button class="btn" onclick="saveRoutineEdit(\''+rid+'\')">Save</button><button class="btn ghost" onclick="closeModal()">Cancel</button></div>');
+};
+window.saveRoutineEdit=async rid=>{
+  const name=$("f-rname").value.trim()||routines[rid].title;
+  const old=routines[rid].items;
+  const items=$("f-ritems").value.split("\n").map(s=>s.trim()).filter(Boolean).map(t=>{
+    const ex=old.find(i=>i.text===t); return ex||{id:uid(),text:t};
+  });
+  closeModal(); await saveRoutine(rid,{title:name,items}).catch(e=>toast("Couldn't save — check connection."));
+};
+window.addRoutine=()=>{
+  openModal('<h2>New routine</h2><label>Name</label><input id="f-rnew" placeholder="e.g. Afternoon reset">'
+    +'<div class="btnrow"><button class="btn" onclick="saveNewRoutine()">Create</button><button class="btn ghost" onclick="closeModal()">Cancel</button></div>');
+};
+window.saveNewRoutine=async ()=>{
+  const t=$("f-rnew").value.trim(); if(!t){ toast("Name it first."); return; }
+  const rid=uid(); closeModal();
+  await saveRoutine(rid,{title:t,items:[]}).catch(e=>toast("Couldn't save — check connection."));
+  toast("Routine created — now add steps. 🔁");
+};
+
+/* ---------------- WEEK ---------------- */
+function renderWeek(){
+  $("week-list").innerHTML=DAY_KEYS.map(k=>{
+    const dayCards=cards.filter(c=>c.active&&c.day===k&&!isDoneToday(c));
+    return '<div class="card weekday-card"><div class="row-between"><h3 style="margin:0">'+DAY_NAMES[k]+'</h3>'
+      +'<button class="btn sage small" onclick="addCardForDay(\''+k+'\')">＋</button></div>'
+      +(dayCards.length? dayCards.map(c=>'<div class="taskrow"><div class="tt"><b>'+esc(c.title)+'</b><div class="progress-note">'+esc(cardMeta(c))+'</div></div>'
+        +'<button class="iconbtn" onclick="editCard(\''+c.id+'\')">✏️</button></div>').join("")
+        :'<div class="empty">Nothing scheduled.</div>')+'</div>';
+  }).join("");
+}
+window.addCardForDay=k=>openModalForNew({category:"basicweek",day:k,cadence:"weekly"});
+function openModalForNew(preset){
+  window._preset=preset||{};
+  const c=Object.assign({title:"",category:"todo",room:"",minutes:15,cadence:"once",notes:"",day:null,dueDate:"",active:true},preset||{});
+  openModal('<h2>New card</h2>'
+    +'<label>Title</label><input id="f-title" value="'+esc(c.title)+'" placeholder="e.g. Wipe the microwave">'
+    +'<label>Divider (category)</label><select id="f-cat">'+Object.keys(CATS).map(k2=>'<option value="'+k2+'"'+(c.category===k2?" selected":"")+'>'+CATS[k2]+'</option>').join("")+'</select>'
+    +'<div class="row-between"><div style="flex:1"><label>Room / zone</label><input id="f-room" value="'+esc(c.room||"")+'" placeholder="Kitchen"></div>'
+    +'<div style="width:110px"><label>Minutes</label><input id="f-min" type="number" min="0" value="'+(c.minutes||"")+'"></div></div>'
+    +'<label>How often</label><select id="f-cad"><option value="daily"'+(c.cadence==="daily"?" selected":"")+'>Daily</option><option value="weekly"'+(c.cadence==="weekly"?" selected":"")+'>Weekly</option><option value="monthly"'+(c.cadence==="monthly"?" selected":"")+'>Monthly</option><option value="once"'+(c.cadence==="once"?" selected":"")+'>One-time</option></select>'
+    +'<label>Day of week (for Basic Week / weekly)</label><select id="f-day"><option value="">—</option>'+DAY_KEYS.map(k2=>'<option value="'+k2+'"'+(c.day===k2?" selected":"")+'>'+DAY_NAMES[k2]+'</option>').join("")+'</select>'
+    +'<label>Do by (one-time tasks)</label><input id="f-due" type="date" value="'+esc(c.dueDate||"")+'">'
+    +'<label>Notes</label><textarea id="f-notes" rows="2">'+esc(c.notes||"")+'</textarea>'
+    +'<div class="btnrow"><button class="btn" onclick="saveCardForm(\'\')">Save card</button><button class="btn ghost" onclick="closeModal()">Cancel</button></div>');
+  setTimeout(()=>{const el=$("f-title"); if(el) el.focus();},100);
+}
+
+/* ---------------- PROGRESS ---------------- */
+async function renderProgress(){
+  let streak=0;
+  for(let i=0;i<60;i++){
+    const ds=addDaysStr(todayStr(),-i);
+    let d;
+    if(i===0 && dayDoc) d=dayDoc;
+    else { const s=await col("days").doc(ds).get(); d=s.exists?s.data():null; }
+    if(!d||!d.routines){ if(i===0) break; else break; }
+    const rids=Object.keys(routines);
+    if(!rids.length) break;
+    const allDone=rids.every(rid=>{
+      const checks=(d.routines[rid])||[];
+      return routines[rid].items.length>0 && routines[rid].items.every(it=>checks.includes(it.id));
+    });
+    if(allDone) streak++; else break;
+  }
+  $("streak-num").textContent=streak;
+  // cards done in last 7 days
+  let weekDone=0;
+  for(let i=0;i<7;i++){
+    const ds=addDaysStr(todayStr(),-i);
+    let d = (i===0&&dayDoc)?dayDoc:(await col("days").doc(ds).get()).data();
+    if(d&&d.done) weekDone+=Object.keys(d.done).length;
+  }
+  $("weekdone-num").textContent=weekDone;
+  const notes=[
+    "Streaks are nice, but they're not the point. A missed day is just a day — the cards will be there tomorrow, without judgment.",
+    "The SHE system was never about perfection. It's about having a gentle plan so the house mostly takes care of itself.",
+    "Remember: refiled isn't failed. Moving a card to tomorrow is the system working exactly as designed."
+  ];
+  $("progress-note").textContent=notes[streak%notes.length];
+}
+
+/* ---------------- SETTINGS: backup ---------------- */
+async function exportAll(){
+  const data={exportedAt:new Date().toISOString(),cards:[],routines:{},days:[],settings:null};
+  const cs=await col("cards").get(); cs.forEach(d=>data.cards.push(Object.assign({id:d.id},d.data())));
+  const rs=await col("routines").get(); rs.forEach(d=>data.routines[d.id]=d.data());
+  const ds=await col("days").orderBy(firebase.firestore.FieldPath.documentId()).limit(90).get();
+  ds.forEach(d=>data.days.push(Object.assign({id:d.id},d.data())));
+  const st=await col("settings").doc("main").get(); data.settings=st.exists?st.data():null;
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download="she-organizer-backup-"+todayStr()+".json"; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+  toast("Backup downloaded. 💾");
+}
+async function importAll(file){
+  const text=await file.text();
+  let data; try{ data=JSON.parse(text); }catch(e){ toast("That file isn't a valid backup."); return; }
+  if(!data.cards||!data.routines){ toast("That file doesn't look like an organizer backup."); return; }
+  if(!confirm("Import this backup? It will add "+data.cards.length+" cards and merge routines. Current data stays unless a card has the same ID.")) return;
+  const batch=db.batch();
+  data.cards.forEach(c=>{ const d=Object.assign({},c); const id=d.id; delete d.id; batch.set(col("cards").doc(id),d,{merge:true}); });
+  Object.keys(data.routines).forEach(rid=>batch.set(col("routines").doc(rid),data.routines[rid],{merge:true}));
+  (data.days||[]).forEach(dd=>{ const d=Object.assign({},dd); const id=d.id; delete d.id; batch.set(col("days").doc(id),d,{merge:true}); });
+  await batch.commit().catch(e=>toast("Import failed — check connection."));
+  toast("Backup imported. 🗂️");
+}
+async function reseed(){
+  if(!confirm("Restore the starter cards? This adds the original SHE starter set alongside your cards.")) return;
+  const batch=db.batch();
+  starterCards().forEach(c=>batch.set(col("cards").doc(),Object.assign({createdAt:firebase.firestore.FieldValue.serverTimestamp()},c)));
+  await batch.commit(); toast("Starter cards restored.");
+}
+async function wipeAll(){
+  if(!confirm("Erase EVERYTHING — all cards, routines, and history? This can't be undone.")) return;
+  if(!confirm("Really sure? Export a backup first if there's anything you want to keep.")) return;
+  const kills=async(coll)=>{ const s=await col(coll).get(); const b=db.batch(); s.forEach(d=>b.delete(d.ref)); await b.commit(); };
+  await kills("cards"); await kills("routines"); await kills("days");
+  await col("settings").doc("main").delete().catch(()=>{});
+  toast("All cleared. Fresh page. 🌱");
+}
+
+/* ---------------- nav + boot ---------------- */
+window.goView=name=>{
+  document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("active",b.dataset.view===name));
+  document.querySelectorAll(".view").forEach(v=>v.classList.toggle("active",v.id==="view-"+name));
+  if(name==="progress") renderProgress();
+  window.scrollTo(0,0);
+};
+document.querySelectorAll("#tabs button").forEach(b=>b.addEventListener("click",()=>goView(b.dataset.view)));
+$("add-card-btn").addEventListener("click",()=>openModalForNew({}));
+$("add-today-btn").addEventListener("click",()=>openModalForNew({refileUntil:todayStr(),cadence:"once"}));
+$("export-btn").addEventListener("click",exportAll);
+$("import-btn").addEventListener("click",()=>$("import-file").click());
+$("import-file").addEventListener("change",e=>{ if(e.target.files[0]) importAll(e.target.files[0]); e.target.value=""; });
+$("reseed-btn").addEventListener("click",reseed);
+$("wipe-btn").addEventListener("click",wipeAll);
+
+let renderQueued=false;
+function render(){
+  if(!$("app")||$("app").classList.contains("hidden")) return;
+  if(renderQueued) return; renderQueued=true;
+  requestAnimationFrame(()=>{ renderQueued=false;
+    try{
+      renderToday(); renderCardBox(); renderRoutines(); renderWeek();
+      const active=document.querySelector("#tabs button.active");
+      if(active&&active.dataset.view==="progress") renderProgress();
+    }catch(e){ console.warn("render",e); }
+  });
+}
+async function boot(){
+  $("setup-screen").classList.add("hidden");
+  $("app").classList.remove("hidden");
+  $("date-line").textContent=new Date().toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric"});
+  await seedIfNeeded().catch(e=>console.warn("seed",e));
+  listenAll();
+}
+</script>
+</body>
+</html>
