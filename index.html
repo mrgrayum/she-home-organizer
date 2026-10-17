@@ -1009,12 +1009,18 @@ async function renderHistory(){
 }
 window.undoDone=async id=>{
   if(!writeGate()) return;
-  const next=Object.assign({},(dayDoc&&dayDoc.done)||{}); delete next[id];
-  await dayRef().set({done:next},{merge:true}).catch(e=>toast("Couldn't undo — check connection."));
-  const c=cards.find(c=>c.id===id);
-  if(c&&c.cadence==="once") await col("cards").doc(id).set({doneEver:false},{merge:true}).catch(()=>{});
-  toast("Put back on the list.");
+  if(dayDoc&&dayDoc.done){ const n=Object.assign({},dayDoc.done); delete n[id]; dayDoc.done=n; }
   render();
+  try{
+    await dayRef().set({done:{[id]:firebase.firestore.FieldValue.delete()}},{merge:true});
+    const c=cards.find(c=>c.id===id);
+    if(c&&c.cadence==="once") await col("cards").doc(id).set({doneEver:false},{merge:true});
+    toast("Put back on the list.");
+  }catch(e){
+    if(dayDoc&&dayDoc.done) dayDoc.done=Object.assign({},dayDoc.done,{[id]:true});
+    toast("Couldn't undo — check connection.");
+    render();
+  }
 };
 async function renderProgress(){
   renderHistory();
