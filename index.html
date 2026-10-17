@@ -497,14 +497,22 @@ function starterRoutines(){
   };
 }
 async function seedIfNeeded(){
-  const s=await col("settings").doc("main").get();
-  if(s.exists && s.data().seeded) return;
-  // Safety: an account that already has content is never re-seeded —
-  // just flag it, so starter content can never overwrite real lists.
-  const cs=await col("cards").limit(1).get().catch(()=>null);
-  const rs=await col("routines").limit(1).get().catch(()=>null);
-  if((cs&&!cs.empty)||(rs&&!rs.empty)){
-    await col("settings").doc("main").set({seeded:true},{merge:true});
+  // The seed decision is made ONLY from server-confirmed state. If the server
+  // cannot be reached, skip: a genuinely new account seeds on its first online boot.
+  const s=await col("settings").doc("main").get({source:"server"}).catch(()=>null);
+  if(!s) return;
+  if(s.exists){
+    // A settings doc means this account has been set up before — a family was
+    // added, a PIN set, or everything was deliberately erased. Starter content
+    // must NEVER be (re)added to such an account; just record the flag.
+    if(!s.data().seeded) await col("settings").doc("main").set({seeded:true},{merge:true}).catch(()=>{});
+    return;
+  }
+  const cs=await col("cards").limit(1).get({source:"server"}).catch(()=>null);
+  const rs=await col("routines").limit(1).get({source:"server"}).catch(()=>null);
+  if(!cs||!rs) return;
+  if(!cs.empty||!rs.empty){
+    await col("settings").doc("main").set({seeded:true},{merge:true}).catch(()=>{});
     return;
   }
   const batch=db.batch();
@@ -515,7 +523,6 @@ async function seedIfNeeded(){
   batch.set(col("settings").doc("main"),{seeded:true,seededAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
   await batch.commit();
 }
-
 /* ---------------- derived state ---------------- */
 function doneMap(){ return (dayDoc&&dayDoc.done)||{}; }
 function isDoneToday(c){ return !!doneMap()[c.id]; }
@@ -1100,7 +1107,9 @@ async function wipeAll(){ if(!writeGate()) return;
   if(!await pinGate("erase everything")) return;
   const kills=async(coll)=>{ const s=await col(coll).get(); const b=db.batch(); s.forEach(d=>b.delete(d.ref)); await b.commit(); };
   await kills("cards"); await kills("routines"); await kills("days");
-  await col("settings").doc("main").delete().catch(()=>{});
+  // Leave a tombstone: the account stays marked as set up (seeded), so no
+  // device ever helpfully re-installs the starter kit into the erased account.
+  await col("settings").doc("main").set({seeded:true,family:[],wipedAt:firebase.firestore.FieldValue.serverTimestamp()}).catch(()=>{});
   toast("All cleared. Fresh page. 🌱");
 }
 
@@ -1265,7 +1274,7 @@ async function boot(){
   await migrateTodoCards().catch(e=>console.warn("migrate",e));
 }
 async function migrateTodoCards(){
-  const s=await col("cards").where("category","==","todo").get().catch(()=>null);
+  const s=await col("cards").where("category","==","todo").get({source:"server"}).catch(()=>null);
   if(!s||s.empty) return;
   const b=db.batch(); let n=0;
   s.forEach(d=>{ const c=d.data()||{};
@@ -1274,7 +1283,7 @@ async function migrateTodoCards(){
   if(n) await b.commit().catch(()=>{});
 }
 async function migrateRoutineCards(){
-  const s=await col("cards").where("category","==","routine").get().catch(()=>null);
+  const s=await col("cards").where("category","==","routine").get({source:"server"}).catch(()=>null);
   if(!s||s.empty) return;
   const b=db.batch(); let n=0;
   s.forEach(d=>{ const c=d.data()||{}; n++;
