@@ -226,6 +226,17 @@ code.cfg{background:#f1e9d8; padding:.15rem .4rem; border-radius:6px; font-size:
         <div style="text-align:right"><div class="streak" id="weekdone-num">0</div><div class="progress-note">cards done this week</div></div>
       </div></div>
       <div class="card"><h3>A gentle note</h3><p class="progress-note" id="progress-note"></p></div>
+      <div class="card">
+        <div class="row-between" style="align-items:center">
+          <h3 style="margin:0">History</h3>
+          <div style="display:flex;gap:.35rem;align-items:center">
+            <button class="iconbtn" onclick="histNav(-1)" title="Previous day">‹</button>
+            <b id="hist-date">Today</b>
+            <button class="iconbtn" id="hist-next" onclick="histNav(1)" title="Next day">›</button>
+          </div>
+        </div>
+        <div id="hist-body"><div class="empty">Loading…</div></div>
+      </div>
     </section>
 
     <!-- SETTINGS -->
@@ -951,7 +962,62 @@ function openModalForNew(preset){
 }
 
 /* ---------------- PROGRESS ---------------- */
+/* ---------------- HISTORY ---------------- */
+let histDate=null, histCache={};
+window.histNav=dir=>{
+  const base=histDate||todayStr();
+  const next=addDaysStr(base,dir);
+  if(next>todayStr()) return;
+  histDate=next; renderHistory();
+};
+async function histDayDoc(ds){
+  if(ds===todayStr()) return dayDoc;
+  if(Object.prototype.hasOwnProperty.call(histCache,ds)) return histCache[ds];
+  try{ const s=await col("days").doc(ds).get(); const d=s.exists?s.data():null; histCache[ds]=d; return d; }
+  catch(e){ return null; }
+}
+async function renderHistory(){
+  const body=$("hist-body"); if(!body) return;
+  const ds=histDate||todayStr();
+  const isToday=ds===todayStr();
+  $("hist-date").textContent=isToday?"Today":fmtDay(ds);
+  const nx=$("hist-next"); if(nx) nx.disabled=isToday;
+  const d=await histDayDoc(ds);
+  if((histDate||todayStr())!==ds) return;
+  const done=(d&&d.done)||{};
+  const doneIds=Object.keys(done).filter(id=>done[id]);
+  const items=doneIds.map(id=>cards.find(c=>c.id===id)).filter(Boolean)
+    .sort((a,b)=>a.title.localeCompare(b.title));
+  const lost=doneIds.length-items.length;
+  const mins=items.reduce((s,c)=>s+(+c.minutes||0),0);
+  const rmap=(d&&d.routines)||{};
+  const rHtml=Object.keys(rmap).filter(rid=>rmap[rid]&&rmap[rid].length).map(rid=>{
+    const r=routines[rid]; if(!r) return "";
+    const steps=r.items.filter(it=>rmap[rid].includes(it.id));
+    if(!steps.length) return "";
+    return '<div style="margin-top:.55rem"><b>'+esc(r.title)+'</b> <span class="progress-note">'+steps.length+' of '+r.items.length+' steps</span></div>'
+      + steps.map(it=>'<div class="taskrow"><div class="tt">'+esc(it.text)+'</div>'
+        +(isToday?'<button class="btn ghost small" onclick="togRoutine(\''+rid+'\',\''+it.id+'\')">Undo</button>':"")
+        +'</div>').join("");
+  }).join("");
+  body.innerHTML =
+    '<p class="progress-note" style="margin:.35rem 0">'+(items.length? items.length+' card'+(items.length>1?"s":"")+' done · '+mins+' minutes' : 'Nothing checked off this day.')+(lost?' (+'+lost+' since removed)':"")+'</p>'
+    + items.map(c=>'<div class="taskrow"><span style="flex:none">✅</span><div class="tt"><b>'+esc(c.title)+'</b>'+whoTag(c.who)+'<div class="progress-note">'+esc(cardMeta(c))+'</div></div>'
+      +(isToday?'<button class="btn ghost small" onclick="undoDone(\''+c.id+'\')">Undo</button>':"")
+      +'</div>').join("")
+    + rHtml;
+}
+window.undoDone=async id=>{
+  if(!writeGate()) return;
+  const next=Object.assign({},(dayDoc&&dayDoc.done)||{}); delete next[id];
+  await dayRef().set({done:next},{merge:true}).catch(e=>toast("Couldn't undo — check connection."));
+  const c=cards.find(c=>c.id===id);
+  if(c&&c.cadence==="once") await col("cards").doc(id).set({doneEver:false},{merge:true}).catch(()=>{});
+  toast("Put back on the list.");
+  render();
+};
 async function renderProgress(){
+  renderHistory();
   let streak=0;
   for(let i=0;i<60;i++){
     const ds=addDaysStr(todayStr(),-i);
