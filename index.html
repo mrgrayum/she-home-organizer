@@ -263,7 +263,11 @@ code.cfg{background:#f1e9d8; padding:.15rem .4rem; border-radius:6px; font-size:
         <p class="progress-note">One login for the whole household — sign every device into it and everyone shares the same lists.</p>
         <div id="account-box"></div>
       </div>
-      <div class="card">
+            <div class="card">
+        <h3>Parental PIN</h3>
+        <div id="pin-area"></div>
+      </div>
+<div class="card">
         <h3>Backup — your safety net</h3>
         <p class="progress-note">Everything syncs to your private database, but a backup file is good housekeeping. Save one now and then.</p>
         <div class="btnrow">
@@ -568,7 +572,7 @@ window.delFamMember=id=>{
   const m=memberById(id); if(!m) return;
   openModal('<h2>Remove '+esc(m.name)+'?</h2><p class="progress-note">Their cards become shared household cards.</p><div class="btnrow"><button class="btn" style="background:var(--danger);" onclick="doDelFam(\''+id+'\')">Remove</button><button class="btn ghost" onclick="closeModal()">Cancel</button></div>');
 };
-window.doDelFam=id=>{ if(!writeGate()) return;
+window.doDelFam=async id=>{ if(!writeGate()) return; if(!await pinGate("remove a family member")) return;
   const list=fam().filter(m=>m.id!==id);
   closeModal();
   col("settings").doc("main").set({family:list},{merge:true}).then(render).catch(e=>toast("Couldn't save \u2014 check connection."));
@@ -809,7 +813,7 @@ window.saveCardForm=async id=>{
 window.delCard=id=>{ openModal('<h2>Delete this card?</h2><p class="progress-note">This can\'t be undone.</p>'+
 '<div class="btnrow"><button class="btn" style="background:var(--danger);" onclick="doDelCard(\''+id+'\')">Delete</button>'+
 '<button class="btn ghost" onclick="closeModal()">Cancel</button></div>'); };
-window.doDelCard=async id=>{ closeModal(); await col("cards").doc(id).delete().catch(e=>toast("Couldn\'t delete \u2014 check connection.")); toast("Card deleted."); render(); };
+window.doDelCard=async id=>{ if(!await pinGate("delete this card")) return; closeModal(); await col("cards").doc(id).delete().catch(e=>toast("Couldn\'t delete \u2014 check connection.")); toast("Card deleted."); render(); };
 
 /* ---------------- ROUTINES ---------------- */
 function renderRoutines(){
@@ -860,7 +864,7 @@ window.editRoutine=rid=>{
     +'<div class="btnrow"><button class="btn" onclick="saveRoutineEdit(\''+rid+'\')">Save</button><button class="btn ghost" style="color:var(--danger);border-color:var(--danger);" onclick="delRoutine(\''+rid+'\')">Delete</button><button class="btn ghost" onclick="closeModal()">Cancel</button></div>');
 };
 window.delRoutine=rid=>{ openModal('<h2>Delete this routine?</h2><p class="progress-note">Its steps and history go with it. This can\'t be undone.</p><div class="btnrow"><button class="btn" style="background:var(--danger);" onclick="doDelRoutine(\''+rid+'\')">Delete</button><button class="btn ghost" onclick="closeModal()">Cancel</button></div>'); };
-window.doDelRoutine=async rid=>{ closeModal(); await col("routines").doc(rid).delete().catch(e=>toast("Couldn\'t delete — check connection.")); toast("Routine deleted."); render(); };
+window.doDelRoutine=async rid=>{ if(!await pinGate("delete this routine")) return; closeModal(); await col("routines").doc(rid).delete().catch(e=>toast("Couldn\'t delete — check connection.")); toast("Routine deleted."); render(); };
 window.saveRoutineEdit=async rid=>{
   const name=$("f-rname").value.trim()||routines[rid].title;
   const old=routines[rid].items;
@@ -1075,6 +1079,7 @@ async function importAll(file){
   let data; try{ data=JSON.parse(text); }catch(e){ toast("That file isn't a valid backup."); return; }
   if(!data.cards||!data.routines){ toast("That file doesn't look like an organizer backup."); return; }
   if(!confirm("Import this backup? It will add "+data.cards.length+" cards and merge routines, and restore the family list and settings. Current data stays unless a card has the same ID.")) return;
+  if(!await pinGate("import a backup")) return;
   const batch=db.batch();
   data.cards.forEach(c=>{ const d=Object.assign({},c); const id=d.id; delete d.id; batch.set(col("cards").doc(id),d,{merge:true}); });
   Object.keys(data.routines).forEach(rid=>batch.set(col("routines").doc(rid),data.routines[rid],{merge:true}));
@@ -1092,12 +1097,134 @@ async function reseed(){ if(!writeGate()) return;
 async function wipeAll(){ if(!writeGate()) return;
   if(!confirm("Erase EVERYTHING — all cards, routines, and history? This can't be undone.")) return;
   if(!confirm("Really sure? Export a backup first if there's anything you want to keep.")) return;
+  if(!await pinGate("erase everything")) return;
   const kills=async(coll)=>{ const s=await col(coll).get(); const b=db.batch(); s.forEach(d=>b.delete(d.ref)); await b.commit(); };
   await kills("cards"); await kills("routines"); await kills("days");
   await col("settings").doc("main").delete().catch(()=>{});
   toast("All cleared. Fresh page. 🌱");
 }
 
+/* ---------------- PARENTAL PIN ---------------- */
+async function pinHash(pin){
+  try{
+    const b=await crypto.subtle.digest("SHA-256", new TextEncoder().encode("she-pin-v1:"+pin));
+    return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("");
+  }catch(e){ return "plain:"+pin; }
+}
+function pinIsSet(){ return !!(settingsDoc&&settingsDoc.pinHash); }
+let pinResolveFn=null, pinTries=0;
+function pinGate(what){
+  if(!pinIsSet()) return Promise.resolve(true);
+  pinTries=0;
+  return new Promise(res=>{
+    pinResolveFn=res;
+    openModal('<h2>Enter PIN</h2>'
+      +'<p class="progress-note">A parental PIN is needed to '+esc(what)+'.</p>'
+      +'<label>PIN</label><input id="f-pin" type="password" inputmode="numeric" autocomplete="off" maxlength="6" placeholder="••••">'
+      +'<p id="pin-err" style="color:var(--danger);min-height:1.2em;margin:.3rem 0 0"></p>'
+      +'<div class="btnrow"><button class="btn" onclick="pinTry()">Unlock</button><button class="btn ghost" onclick="pinCancel()">Cancel</button></div>'
+      +(U&&U.email?'<p style="margin-top:.6rem"><a href="#" onclick="pinForgot(event)">Forgot your PIN?</a></p>':""));
+    setTimeout(()=>{ const i=$("f-pin"); if(i){ i.focus(); i.addEventListener("keydown",e=>{ if(e.key==="Enter") pinTry(); }); } },100);
+  });
+}
+function pinSettle(v){ const r=pinResolveFn; pinResolveFn=null; if(r) r(v); }
+window.pinCancel=()=>{ closeModal(); pinSettle(false); };
+window.pinTry=async()=>{
+  const v=($("f-pin")&&$("f-pin").value)||"";
+  if(v && (await pinHash(v))===(settingsDoc&&settingsDoc.pinHash)){ closeModal(); pinSettle(true); return; }
+  pinTries++;
+  if(pinTries>=3){ closeModal(); toast("Too many wrong tries — cancelled."); pinSettle(false); return; }
+  pinErrMsg("Wrong PIN — try again.");
+  const i=$("f-pin"); if(i){ i.value=""; i.focus(); }
+};
+window.pinForgot=ev=>{
+  if(ev) ev.preventDefault();
+  openModal('<h2>Reset the PIN</h2>'
+    +'<p class="progress-note">Enter the family account password and the PIN will be removed. You can set a new one in Settings afterwards.</p>'
+    +'<label>Account password</label><input id="f-acctpw" type="password" autocomplete="current-password">'
+    +'<p id="pin-err" style="color:var(--danger);min-height:1.2em;margin:.3rem 0 0"></p>'
+    +'<div class="btnrow"><button class="btn" onclick="pinForgotGo()">Remove PIN</button><button class="btn ghost" onclick="pinCancel()">Cancel</button></div>');
+  setTimeout(()=>{ const i=$("f-acctpw"); if(i) i.focus(); },100);
+};
+window.pinForgotGo=async()=>{
+  const pw=($("f-acctpw")&&$("f-acctpw").value)||"";
+  if(!pw) return;
+  try{
+    const cred=firebase.auth.EmailAuthProvider.credential(U.email,pw);
+    await firebase.auth().currentUser.reauthenticateWithCredential(cred);
+  }catch(e){ pinErrMsg("That password didn't work — try again."); return; }
+  if(await savePinHash(firebase.firestore.FieldValue.delete())){
+    closeModal(); pinSettle(false);
+    toast("PIN removed. Set a new one in Settings whenever you're ready.");
+  } else pinErrMsg("Couldn't reach the database — check connection.");
+};
+async function savePinHash(v){
+  try{ await col("settings").doc("main").set({pinHash:v},{merge:true}); }
+  catch(e){ return false; }
+  if(settingsDoc){ if(typeof v==="string") settingsDoc.pinHash=v; else delete settingsDoc.pinHash; }
+  renderPinArea();
+  return true;
+}
+function pinErrMsg(t){ const e=$("pin-err"); if(e) e.textContent=t; }
+function renderPinArea(){
+  const el=$("pin-area"); if(!el) return;
+  el.innerHTML = pinIsSet()
+    ? '<p class="progress-note" style="margin-top:0">PIN is <b>on</b> — deleting a card or routine, removing a family member, importing a backup, or erasing everything asks for it first.</p>'
+      +'<div class="btnrow"><button class="btn secondary small" onclick="pinChangeOpen()">Change PIN</button><button class="btn ghost small" onclick="pinRemoveOpen()">Remove PIN</button></div>'
+    : '<p class="progress-note" style="margin-top:0">No PIN set. Add one and the app will ask for it before anything can be deleted, imported over, or erased — so little hands can\'t wipe out your lists by accident.</p>'
+      +'<div class="btnrow"><button class="btn sage small" onclick="pinSetOpen()">Set a PIN</button></div>';
+}
+window.pinSetOpen=()=>{
+  openModal('<h2>Set a parental PIN</h2>'
+    +'<label>New PIN (4–6 digits)</label><input id="f-pin1" type="password" inputmode="numeric" autocomplete="off" maxlength="6">'
+    +'<label>Type it again</label><input id="f-pin2" type="password" inputmode="numeric" autocomplete="off" maxlength="6">'
+    +'<p id="pin-err" style="color:var(--danger);min-height:1.2em;margin:.3rem 0 0"></p>'
+    +'<div class="btnrow"><button class="btn" onclick="pinSetGo()">Save PIN</button><button class="btn ghost" onclick="closeModal()">Cancel</button></div>');
+  setTimeout(()=>{ const i=$("f-pin1"); if(i) i.focus(); },100);
+};
+function readNewPin(){
+  const a=($("f-pin1")&&$("f-pin1").value)||"", b=($("f-pin2")&&$("f-pin2").value)||"";
+  if(!/^\d{4,6}$/.test(a)){ pinErrMsg("Use 4 to 6 digits."); return null; }
+  if(a!==b){ pinErrMsg("The two PINs don't match."); return null; }
+  return a;
+}
+window.pinSetGo=async()=>{
+  if(!writeGate()) return;
+  const p=readNewPin(); if(!p) return;
+  if(await savePinHash(await pinHash(p))){ closeModal(); toast("PIN set. 🔒"); }
+  else toast("Couldn't save — check connection.");
+};
+window.pinChangeOpen=()=>{
+  openModal('<h2>Change PIN</h2>'
+    +'<label>Current PIN</label><input id="f-pcur" type="password" inputmode="numeric" autocomplete="off" maxlength="6">'
+    +'<label>New PIN (4–6 digits)</label><input id="f-pin1" type="password" inputmode="numeric" autocomplete="off" maxlength="6">'
+    +'<label>Type the new one again</label><input id="f-pin2" type="password" inputmode="numeric" autocomplete="off" maxlength="6">'
+    +'<p id="pin-err" style="color:var(--danger);min-height:1.2em;margin:.3rem 0 0"></p>'
+    +'<div class="btnrow"><button class="btn" onclick="pinChangeGo()">Save new PIN</button><button class="btn ghost" onclick="closeModal()">Cancel</button></div>');
+  setTimeout(()=>{ const i=$("f-pcur"); if(i) i.focus(); },100);
+};
+window.pinChangeGo=async()=>{
+  if(!writeGate()) return;
+  const cur=($("f-pcur")&&$("f-pcur").value)||"";
+  if((await pinHash(cur))!==(settingsDoc&&settingsDoc.pinHash)){ pinErrMsg("Current PIN is wrong."); return; }
+  const p=readNewPin(); if(!p) return;
+  if(await savePinHash(await pinHash(p))){ closeModal(); toast("PIN changed. 🔒"); }
+  else toast("Couldn't save — check connection.");
+};
+window.pinRemoveOpen=()=>{
+  openModal('<h2>Remove PIN</h2>'
+    +'<label>Current PIN</label><input id="f-pcur" type="password" inputmode="numeric" autocomplete="off" maxlength="6">'
+    +'<p id="pin-err" style="color:var(--danger);min-height:1.2em;margin:.3rem 0 0"></p>'
+    +'<div class="btnrow"><button class="btn" style="background:var(--danger)" onclick="pinRemoveGo()">Remove PIN</button><button class="btn ghost" onclick="closeModal()">Cancel</button></div>');
+  setTimeout(()=>{ const i=$("f-pcur"); if(i) i.focus(); },100);
+};
+window.pinRemoveGo=async()=>{
+  if(!writeGate()) return;
+  const cur=($("f-pcur")&&$("f-pcur").value)||"";
+  if((await pinHash(cur))!==(settingsDoc&&settingsDoc.pinHash)){ pinErrMsg("That PIN is wrong."); return; }
+  if(await savePinHash(firebase.firestore.FieldValue.delete())){ closeModal(); toast("PIN removed."); }
+  else toast("Couldn't save — check connection.");
+};
 /* ---------------- nav + boot ---------------- */
 window.goView=name=>{
   document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("active",b.dataset.view===name));
@@ -1120,7 +1247,7 @@ function render(){
   if(!$("app")||$("app").classList.contains("hidden")) return;
   if(renderQueued) return; renderQueued=true;
   requestAnimationFrame(()=>{ renderQueued=false;
-    const views=[["today",renderToday],["cards",renderCardBox],["routines",renderRoutines],["week",renderWeek],["family",renderFamily],["chips",renderWhoChips],["board",renderBoard],["account",renderAccount]];
+    const views=[["today",renderToday],["cards",renderCardBox],["routines",renderRoutines],["week",renderWeek],["family",renderFamily],["chips",renderWhoChips],["board",renderBoard],["account",renderAccount],["pin",renderPinArea]];
     for(const v of views){ try{ v[1](); }catch(e){ console.warn("render:"+v[0],e); } }
     try{
       const active=document.querySelector("#tabs button.active");
