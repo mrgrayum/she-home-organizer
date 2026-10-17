@@ -1081,12 +1081,19 @@ async function exportAll(){
   setTimeout(()=>URL.revokeObjectURL(a.href),4000);
   toast("Backup downloaded. 💾");
 }
+let pendingImport=null;
 async function importAll(file){
   const text=await file.text();
   let data; try{ data=JSON.parse(text); }catch(e){ toast("That file isn't a valid backup."); return; }
   if(!data.cards||!data.routines){ toast("That file doesn't look like an organizer backup."); return; }
-  if(!confirm("Import this backup? It will add "+data.cards.length+" cards and merge routines, and restore the family list and settings. Current data stays unless a card has the same ID.")) return;
+  pendingImport=data;
+  openModal('<h2>Import this backup?</h2><p class="progress-note">It will add '+data.cards.length+' cards and merge routines, and restore the family list and settings. Current data stays unless a card has the same ID.</p>'+'<div class="btnrow"><button class="btn" onclick="doImportAll()">Import backup</button><button class="btn ghost" onclick="closeModal()">Cancel</button></div>');
+}
+window.doImportAll=async()=>{
+  const data=pendingImport; pendingImport=null;
+  if(!data) return;
   if(!await pinGate("import a backup")) return;
+  closeModal();
   const batch=db.batch();
   data.cards.forEach(c=>{ const d=Object.assign({},c); const id=d.id; delete d.id; batch.set(col("cards").doc(id),d,{merge:true}); });
   Object.keys(data.routines).forEach(rid=>batch.set(col("routines").doc(rid),data.routines[rid],{merge:true}));
@@ -1094,25 +1101,29 @@ async function importAll(file){
   if(data.settings) batch.set(col("settings").doc("main"),data.settings,{merge:true});
   await batch.commit().catch(e=>toast("Import failed — check connection."));
   toast("Backup imported. 🗂️");
+};async function reseed(){ if(!writeGate()) return;
+  openModal('<h2>Restore starter cards?</h2><p class="progress-note">This adds the original SHE starter set alongside your cards.</p>'+'<div class="btnrow"><button class="btn" onclick="doReseed()">Restore</button><button class="btn ghost" onclick="closeModal()">Cancel</button></div>');
 }
-async function reseed(){ if(!writeGate()) return;
-  if(!confirm("Restore the starter cards? This adds the original SHE starter set alongside your cards.")) return;
+window.doReseed=async()=>{ closeModal();
   const batch=db.batch();
   starterCards().forEach(c=>batch.set(col("cards").doc(),Object.assign({createdAt:firebase.firestore.FieldValue.serverTimestamp()},c)));
   await batch.commit(); toast("Starter cards restored.");
+};async function wipeAll(){ if(!writeGate()) return;
+  openModal('<h2>Erase everything?</h2><p class="progress-note">Erase EVERYTHING — all cards, routines, and history? This can\'t be undone.</p>'+'<div class="btnrow"><button class="btn" style="background:var(--danger)" onclick="wipeStep2()">Erase everything</button><button class="btn ghost" onclick="closeModal()">Cancel</button></div>');
 }
-async function wipeAll(){ if(!writeGate()) return;
-  if(!confirm("Erase EVERYTHING — all cards, routines, and history? This can't be undone.")) return;
-  if(!confirm("Really sure? Export a backup first if there's anything you want to keep.")) return;
+window.wipeStep2=()=>{
+  openModal('<h2>Really sure?</h2><p class="progress-note">Export a backup first if there\'s anything you want to keep. The family list and PIN are erased too.</p>'+'<div class="btnrow"><button class="btn" style="background:var(--danger)" onclick="doWipeAll()">Yes, erase it all</button><button class="btn ghost" onclick="closeModal()">Cancel</button></div>');
+};
+window.doWipeAll=async()=>{
   if(!await pinGate("erase everything")) return;
+  closeModal();
   const kills=async(coll)=>{ const s=await col(coll).get(); const b=db.batch(); s.forEach(d=>b.delete(d.ref)); await b.commit(); };
   await kills("cards"); await kills("routines"); await kills("days");
   // Leave a tombstone: the account stays marked as set up (seeded), so no
   // device ever helpfully re-installs the starter kit into the erased account.
   await col("settings").doc("main").set({seeded:true,family:[],wipedAt:firebase.firestore.FieldValue.serverTimestamp()}).catch(()=>{});
   toast("All cleared. Fresh page. 🌱");
-}
-
+};
 /* ---------------- PARENTAL PIN ---------------- */
 async function pinHash(pin){
   try{
