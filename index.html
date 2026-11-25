@@ -130,6 +130,25 @@ code.cfg{background:#f1e9d8; padding:.15rem .4rem; border-radius:6px; font-size:
 .iconbtn{border:none; background:none; font-size:1.1rem; padding:.3rem .45rem; color:var(--ink-soft);}
 .progress-note{font-size:.9rem; color:var(--ink-soft);}
 .streak{font-size:2rem; font-weight:800; color:var(--terra-dark);}
+
+.display-gear{display:none;position:fixed;right:12px;bottom:12px;z-index:80;width:46px;height:46px;border-radius:99px;border:1px solid var(--line);background:var(--card);opacity:.5;font-size:20px;box-shadow:var(--shadow);cursor:pointer}
+body.display-mode .display-gear{display:block}
+body.display-mode .tabs{display:none}
+body.display-mode .topbar h1{font-size:1.15rem}
+body.display-mode #view-board>.kicker,body.display-mode #view-board>p.progress-note{display:none}
+body.display-mode .bcol{position:relative}
+body.display-mode .bcol-head b{font-size:1.5rem}
+body.display-mode .taskrow{padding:.8rem .6rem;gap:.6rem}
+body.display-mode .taskrow .tt b{font-size:1.25rem}
+body.display-mode .taskrow .minutes{font-size:1.05rem}
+body.display-mode .check{width:54px;height:54px;flex-basis:54px}
+body.display-mode .broute-head{font-size:1.12rem;padding:.55rem .3rem}
+.dstars{margin-left:auto;font-weight:700;font-size:1.15rem;white-space:nowrap}
+.dstar-fly{position:fixed;z-index:300;font-size:46px;pointer-events:none;transform:translate(-50%,-50%);filter:drop-shadow(0 3px 6px rgba(0,0,0,.25))}
+.dall-done{position:absolute;left:8px;right:8px;top:46px;z-index:5;background:var(--gold);color:#fff;font-weight:800;text-align:center;padding:.5rem;border-radius:10px;font-size:1.2rem;box-shadow:var(--shadow)}
+.dconfetti-bit{position:absolute;z-index:4;border-radius:2px;pointer-events:none}
+.disp-member{display:flex;align-items:center;gap:.55rem;padding:.35rem 0;font-size:1.02rem;cursor:pointer}
+.disp-member input{width:22px;height:22px;flex:none}
 </style>
 </head>
 <body>
@@ -267,6 +286,10 @@ code.cfg{background:#f1e9d8; padding:.15rem .4rem; border-radius:6px; font-size:
         <h3>Parental PIN</h3>
         <div id="pin-area"></div>
       </div>
+      <div class="card">
+        <h3>Family Display</h3>
+        <div id="display-area"></div>
+      </div>
 <div class="card">
         <h3>Backup — your safety net</h3>
         <p class="progress-note">Everything syncs to your private database, but a backup file is good housekeeping. Save one now and then.</p>
@@ -300,6 +323,7 @@ code.cfg{background:#f1e9d8; padding:.15rem .4rem; border-radius:6px; font-size:
   </nav>
 </div>
 
+<button id="display-gear" class="display-gear" onclick="displayExit()" title="Parent access">⚙️</button>
 <div class="modal-bg" id="modal-bg"><div class="modal" id="modal"></div></div>
 <div class="toast" id="toast"></div>
 
@@ -447,6 +471,7 @@ async function saveCard(card){ if(!writeGate()) return;
 }
 
 async function markDone(id){ if(!writeGate()) return;
+  try{ if(isDisplayMode()){ const c0=cards.find(x=>x.id===id); if(c0&&c0.who&&!isDoneToday(c0)){ const ev=window.event, t=ev&&ev.target&&ev.target.getBoundingClientRect?ev.target.getBoundingClientRect():null; window._pendingCeleb={mid:c0.who, x:t?t.left+t.width/2:innerWidth/2, y:t?t.top+t.height/2:innerHeight/2}; } } }catch(e){}
   const t=todayStr();
   await dayRef().set({done:Object.assign({},(dayDoc&&dayDoc.done)||{},{[id]:true})},{merge:true});
   const c=cards.find(c=>c.id===id);
@@ -460,6 +485,7 @@ async function refileCard(id, when){ if(!writeGate()) return;
   toast("Parked until "+fmtDay(target)+" \u2014 off your list, not lost. \ud83d\udc9b");
 }
 async function toggleRoutineItem(rid, itemId){ if(!writeGate()) return;
+  try{ if(isDisplayMode()){ const cur0=((dayDoc&&dayDoc.routines)||{})[rid]||[]; const r0=routines[rid]; if(r0&&r0.who&&!cur0.includes(itemId)){ const ev=window.event, t=ev&&ev.target&&ev.target.getBoundingClientRect?ev.target.getBoundingClientRect():null; window._pendingCeleb={mid:r0.who, x:t?t.left+t.width/2:innerWidth/2, y:t?t.top+t.height/2:innerHeight/2}; } } }catch(e){}
   const t=todayStr(); const cur=((dayDoc&&dayDoc.routines)||{})[rid]||[];
   const next = cur.includes(itemId) ? cur.filter(i=>i!==itemId) : cur.concat(itemId);
   await dayRef().set({routines:Object.assign({},(dayDoc&&dayDoc.routines)||{},{[rid]:next})},{merge:true});
@@ -604,7 +630,7 @@ function dayCards(){
 }
 
 function onDeck(){ return dayCards().filter(c=>!isDoneToday(c)); }
-function cardMeta(c){
+function cardMeta(c, noMin){
   const bits=[];
   if(c.room) bits.push(c.room);
   bits.push(CATS[c.category]||c.category);
@@ -613,7 +639,7 @@ function cardMeta(c){
   else if(c.category==="zones" && c.monthWeek) bits.push("Week "+(+c.monthWeek)+" of the month");
   else if(c.cadence==="once") bits.push("One-time");
   else if(c.cadence) bits.push(c.cadence[0].toUpperCase()+c.cadence.slice(1));
-  if(c.minutes) bits.push(c.minutes+" min");
+  if(c.minutes && !noMin) bits.push(c.minutes+" min");
   return bits.join(" · ");
 }
 
@@ -896,7 +922,7 @@ window.saveNewRoutine=async ()=>{
 function boardRow(c){
   return '<div class="taskrow" onmousedown="lpStart(\''+c.id+'\')" onmouseup="lpEnd()" onmouseleave="lpEnd()" ontouchstart="lpStart(\''+c.id+'\')" ontouchend="lpEnd()" ontouchmove="lpEnd()" oncontextmenu="return false">'
     +'<button class="check" onclick="doDone(\''+c.id+'\')" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()"></button>'
-    +'<div class="tt" onclick="rowEdit(\''+c.id+'\')"><b>'+esc(c.title)+'</b>'+whoTag(c.who)+'<div class="progress-note">'+esc(cardMeta(c))+'</div></div>'
+    +'<div class="tt" onclick="rowEdit(\''+c.id+'\')"><b>'+esc(c.title)+'</b><div class="progress-note">'+esc(cardMeta(c,true))+'</div></div>'
     +'<span class="minutes">'+(c.minutes?c.minutes+"m":"")+'</span></div>';
 }
 function routineStepsHtml(rid){
@@ -918,28 +944,149 @@ window._boardOpen=window._boardOpen||{};
 window.toggleBoardRoutine=rid=>{ window._boardOpen[rid]=!window._boardOpen[rid]; renderBoard(); };
 window._todayOpen=window._todayOpen||{};
 window.toggleTodayRoutine=rid=>{ window._todayOpen[rid]=!window._todayOpen[rid]; render(); };
+
+/* ---------------- FAMILY DISPLAY MODE ---------------- */
+function displayCfg(){ return (settingsDoc&&settingsDoc.display)||null; }
+function displayMembers(){
+  const list=fam(); const cfg=displayCfg();
+  if(!cfg||!Array.isArray(cfg.members)||!cfg.members.length) return list;
+  const sel=list.filter(m=>cfg.members.includes(m.id));
+  return sel.length?sel:list;
+}
+function displaySound(){ const cfg=displayCfg(); return (cfg&&cfg.sound)||"chime"; }
+function isDisplayMode(){
+  try{
+    if(sessionStorage.getItem("sheDisplayExit")) return false;
+    if(new URLSearchParams(location.search).get("display")==="1") return true;
+    return localStorage.getItem("sheDisplay")==="1";
+  }catch(e){ return false; }
+}
+function memberStars(mid){
+  let n=dayCards().filter(c=>c.who===mid&&isDoneToday(c)).length;
+  Object.keys(routines).forEach(rid=>{ const r=routines[rid]; if(r&&r.who===mid){ const ch=((dayDoc&&dayDoc.routines)||{})[rid]||[]; n+=ch.length; } });
+  return n;
+}
+function memberRemaining(mid){
+  let n=dayCards().filter(c=>c.who===mid&&!isDoneToday(c)).length;
+  Object.keys(routines).forEach(rid=>{ const r=routines[rid]; if(r&&r.who===mid){ const ch=((dayDoc&&dayDoc.routines)||{})[rid]||[]; n+=r.items.filter(it=>!ch.includes(it.id)).length; } });
+  return n;
+}
+function displayRow(c){
+  return '<div class="taskrow drow">'
+    +'<button class="check" onclick="doDone(\''+c.id+'\')"></button>'
+    +'<div class="tt"><b>'+esc(c.title)+'</b>'+(c.room?'<div class="progress-note">'+esc(c.room)+'</div>':"")+'</div>'
+    +'<span class="minutes">'+(c.minutes?c.minutes+"m":"")+'</span></div>';
+}
+function celebSound(){
+  const kind=displaySound(); if(kind==="off") return;
+  try{
+    const AC=window.AudioContext||window.webkitAudioContext; if(!AC) return;
+    const ctx=window._celebAC||(window._celebAC=new AC());
+    if(ctx.state==="suspended") ctx.resume();
+    const t=ctx.currentTime+0.01;
+    const tone=(f,st,d,type,g)=>{ const o=ctx.createOscillator(), gn=ctx.createGain(); o.type=type; o.frequency.value=f;
+      gn.gain.setValueAtTime(0.0001,st); gn.gain.exponentialRampToValueAtTime(g,st+0.02); gn.gain.exponentialRampToValueAtTime(0.0001,st+d);
+      o.connect(gn); gn.connect(ctx.destination); o.start(st); o.stop(st+d+0.05); };
+    if(kind==="coin"){ tone(988,t,0.09,"square",0.05); tone(1319,t+0.09,0.35,"square",0.05); }
+    else { tone(1047,t,0.18,"sine",0.12); tone(1319,t+0.09,0.22,"sine",0.12); tone(1568,t+0.18,0.32,"sine",0.12); }
+  }catch(e){}
+}
+function consumeCeleb(){
+  const p=window._pendingCeleb; if(!p) return; window._pendingCeleb=null;
+  const target=document.querySelector('[data-stars-for="'+p.mid+'"]');
+  celebSound();
+  if(target){ try{ target.animate([{transform:"scale(1)"},{transform:"scale(1.5)"},{transform:"scale(1)"}],{duration:480,easing:"ease-out"}); }catch(e){} }
+  const reduced=window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if(reduced||!target){ maybeAllDone(p.mid); return; }
+  const tr=target.getBoundingClientRect();
+  const star=document.createElement("div"); star.className="dstar-fly"; star.textContent="\u2B50";
+  star.style.left=p.x+"px"; star.style.top=p.y+"px"; document.body.appendChild(star);
+  const dx=(tr.left+tr.width/2)-p.x, dy=(tr.top+tr.height/2)-p.y;
+  let finished=false; const done=()=>{ if(finished) return; finished=true; star.remove(); maybeAllDone(p.mid); };
+  try{
+    const anim=star.animate([
+      {transform:"translate(-50%,-50%) scale(.6) rotate(0deg)",opacity:1},
+      {transform:"translate(calc(-50% + "+dx+"px), calc(-50% + "+dy+"px)) scale(1.15) rotate(300deg)",opacity:1,offset:.8},
+      {transform:"translate(calc(-50% + "+dx+"px), calc(-50% + "+dy+"px)) scale(.2) rotate(340deg)",opacity:0}
+    ],{duration:750,easing:"cubic-bezier(.2,.7,.3,1)"});
+    if(anim&&anim.finished&&anim.finished.then) anim.finished.then(done).catch(done); else setTimeout(done,800);
+  }catch(e){ done(); }
+  setTimeout(done,1600);
+}
+function maybeAllDone(mid){
+  if(memberRemaining(mid)>0||memberStars(mid)===0) return;
+  const colEl=document.querySelector('[data-col-for="'+mid+'"]'); if(!colEl) return;
+  if(colEl.querySelector(".dall-done")) return;
+  const m=memberById(mid);
+  const banner=document.createElement("div"); banner.className="dall-done"; banner.textContent="All done! \uD83C\uDF89";
+  colEl.appendChild(banner); setTimeout(()=>banner.remove(),3600);
+  if(window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const colors=[(m&&m.color)||"#d9a441","#d9a441","#5b8a72","#c96f4a"];
+  for(let i=0;i<26;i++){
+    const bit=document.createElement("div"); bit.className="dconfetti-bit";
+    const s=6+Math.random()*7;
+    bit.style.width=s+"px"; bit.style.height=(s*0.6)+"px"; bit.style.background=colors[i%colors.length];
+    bit.style.left=(8+Math.random()*84)+"%"; bit.style.top="30px"; colEl.appendChild(bit);
+    const dx=(Math.random()*70-35), dy=140+Math.random()*160, rot=Math.random()*540-270;
+    let gone=false; const rm=()=>{ if(gone) return; gone=true; bit.remove(); };
+    try{
+      const a=bit.animate([{transform:"translate(0,0) rotate(0deg)",opacity:1},{transform:"translate("+dx+"px,"+dy+"px) rotate("+rot+"deg)",opacity:0}],{duration:1200+Math.random()*500,easing:"cubic-bezier(.2,.7,.4,1)"});
+      if(a&&a.finished&&a.finished.then) a.finished.then(rm).catch(rm); else setTimeout(rm,1800);
+    }catch(e){ rm(); }
+    setTimeout(rm,2200);
+  }
+}
+function renderDisplayArea(){
+  const el=$("display-area"); if(!el) return;
+  const list=fam();
+  if(!list.length){ el.innerHTML='<p class="progress-note" style="margin-top:0">Add family members above first \u2014 then you can choose who appears on the wall panel.</p>'; return; }
+  const cfg=displayCfg();
+  const sel=cfg&&Array.isArray(cfg.members)?cfg.members:list.map(m=>m.id);
+  const snd=displaySound();
+  let exited=false; try{ exited=!!sessionStorage.getItem("sheDisplayExit"); }catch(e){}
+  el.innerHTML='<p class="progress-note" style="margin-top:0">The wall panel shows only the Board, only for the people checked here \u2014 and only their own cards and routines. Changes reach the panel on their own.</p>'
+    +list.map(m=>'<label class="disp-member"><input type="checkbox" data-disp-member="'+m.id+'"'+(sel.includes(m.id)?" checked":"")+' onchange="saveDisplaySettings()"><span style="width:12px;height:12px;border-radius:99px;background:'+m.color+';display:inline-block;flex:none"></span>'+esc(m.name)+'</label>').join("")
+    +'<label>Celebration sound</label><select id="disp-sound" onchange="saveDisplaySettings()"><option value="off"'+(snd==="off"?" selected":"")+'>Off</option><option value="chime"'+(snd==="chime"?" selected":"")+'>Chime</option><option value="coin"'+(snd==="coin"?" selected":"")+'>Coin (cha-ching)</option></select>'
+    +'<div class="btnrow">'+(exited?'<button class="btn sage small" onclick="displayGo()">Back to display mode</button>':'<button class="btn secondary small" onclick="displayGo()">Preview display mode on this device</button>')+'</div>'
+    +'<p class="progress-note">On the panel, tap the \u2699\uFE0F in the corner and enter the parental PIN to reach the full app. The panel returns to the display on its own at the next reload.</p>';
+}
+window.saveDisplaySettings=()=>{ if(!writeGate()) return;
+  const members=Array.from(document.querySelectorAll("[data-disp-member]")).filter(i=>i.checked).map(i=>i.getAttribute("data-disp-member"));
+  const sndEl=$("disp-sound"); const sound=sndEl?sndEl.value:"chime";
+  col("settings").doc("main").set({display:{members:members,sound:sound}},{merge:true}).then(()=>toast("Display settings saved. \uD83D\uDCFA")).catch(e=>toast("Couldn't save \u2014 check connection."));
+};
+window.displayGo=()=>{ try{ localStorage.setItem("sheDisplay","1"); sessionStorage.removeItem("sheDisplayExit"); }catch(e){} location.reload(); };
+window.displayExit=async()=>{ if(!(await pinGate("leave the family display"))) return; try{ sessionStorage.setItem("sheDisplayExit","1"); }catch(e){} location.reload(); };
+function applyDisplayMode(){ if(isDisplayMode()){ document.body.classList.add("display-mode"); goView("board"); } }
+
 function renderBoard(){
   const el=$("board-cols"); if(!el) return;
   el.style.gridTemplateColumns="";
-  const list=fam();
+  const disp=isDisplayMode();
+  const list=disp?displayMembers():fam();
+  if(disp && !fam().length){
+    el.innerHTML='<div class="card"><div class="empty"><h3 style="margin:.2rem 0">Family display</h3><p class="progress-note">Ask a parent to set this display up from the app on their phone.</p></div></div>';
+    return;
+  }
   if(!list.length){
     el.innerHTML='<div class="card"><div class="empty"><h3 style="margin:.2rem 0">No board yet</h3><p class="progress-note">Add family members in Settings \u2192 Family and each person gets their own column here.</p><div class="btnrow"><button class="btn small" onclick="goView(\'settings\')">Go to Settings</button></div></div></div>';
     return;
   }
-  el.style.gridTemplateColumns="repeat("+list.length+", minmax(210px, 1fr))";
+  el.style.gridTemplateColumns="repeat("+list.length+", minmax("+(disp?240:210)+"px, 1fr))";
   el.innerHTML=list.map(m=>{
-    const mine=w=>!w||w===m.id;
+    const mine=disp?(w=>w===m.id):(w=>!w||w===m.id);
     const all=dayCards().filter(c=>mine(c.who));
     const deck=onDeck().filter(c=>mine(c.who));
     const done=all.filter(isDoneToday);
     const pct=all.length?Math.round(done.length/all.length*100):100;
     const rids=Object.keys(routines).sort((a,b)=>routineOrderPos(a)-routineOrderPos(b)).filter(rid=>mine(routines[rid].who));
-    return '<div class="bcol"><div class="bcol-head"><span style="width:10px;height:10px;border-radius:99px;background:'+m.color+';display:inline-block;flex:none"></span><b>'+esc(m.name)+'</b><span class="progress-note">'+done.length+'/'+all.length+' \u00B7 '+pct+'%</span></div>'
+    return '<div class="bcol"'+(disp?' data-col-for="'+m.id+'"':"")+'><div class="bcol-head"><span style="width:10px;height:10px;border-radius:99px;background:'+m.color+';display:inline-block;flex:none"></span><b>'+esc(m.name)+'</b><span class="progress-note">'+done.length+'/'+all.length+' \u00B7 '+pct+'%</span>'+(disp?'<span class="dstars" data-stars-for="'+m.id+'">\u2B50 '+memberStars(m.id)+'</span>':"")+'</div>'
       +'<div class="bcol-bar"><div style="width:'+pct+'%"></div></div>'
-      +(deck.length?deck.map(boardRow).join(""):'<div class="progress-note" style="padding:.3rem 0">All clear \uD83C\uDF89</div>')
+      +(deck.length?deck.map(disp?displayRow:boardRow).join(""):'<div class="progress-note" style="padding:.3rem 0">All clear \uD83C\uDF89</div>')
       +(rids.length?rids.map(boardRoutine).join(""):"")
-      +'<button class="btn sage small" style="margin-top:.55rem;width:100%" onclick="addTodoFor(\''+m.id+'\')">\uFF0B To-do</button></div>';
+      +(disp?"":'<button class="btn sage small" style="margin-top:.55rem;width:100%" onclick="addTodoFor(\''+m.id+'\')">\uFF0B To-do</button>')+'</div>';
   }).join("");
+  if(disp) consumeCeleb();
 }
 window.addTodoFor=id=>{ window._todoWho=id; addTodo(); window._todoWho=null; };
 function renderWeek(){
@@ -1247,6 +1394,7 @@ window.pinRemoveGo=async()=>{
 };
 /* ---------------- nav + boot ---------------- */
 window.goView=name=>{
+  if(document.body.classList.contains("display-mode") && name!=="board") return;
   document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("active",b.dataset.view===name));
   document.querySelectorAll(".view").forEach(v=>v.classList.toggle("active",v.id==="view-"+name));
   if(name==="progress") renderProgress();
@@ -1267,7 +1415,7 @@ function render(){
   if(!$("app")||$("app").classList.contains("hidden")) return;
   if(renderQueued) return; renderQueued=true;
   requestAnimationFrame(()=>{ renderQueued=false;
-    const views=[["today",renderToday],["cards",renderCardBox],["routines",renderRoutines],["week",renderWeek],["family",renderFamily],["chips",renderWhoChips],["board",renderBoard],["account",renderAccount],["pin",renderPinArea]];
+    const views=[["today",renderToday],["cards",renderCardBox],["routines",renderRoutines],["week",renderWeek],["family",renderFamily],["chips",renderWhoChips],["board",renderBoard],["account",renderAccount],["pin",renderPinArea],["display",renderDisplayArea]];
     for(const v of views){ try{ v[1](); }catch(e){ console.warn("render:"+v[0],e); } }
     try{
       const active=document.querySelector("#tabs button.active");
@@ -1279,6 +1427,7 @@ async function boot(){
   $("setup-screen").classList.add("hidden");
   $("app").classList.remove("hidden");
   $("date-line").textContent=new Date().toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric"});
+  applyDisplayMode();
   listenAll(); renderAccount();
   await seedIfNeeded().catch(e=>console.warn("seed",e));
   await migrateRoutineCards().catch(e=>console.warn("migrate",e));
