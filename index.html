@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Grayum Home Task Organizer</title>
 <meta name="description" content="A household task organizer built on the Sidetracked Home Executives card-file system.">
 <style>
@@ -202,6 +202,8 @@ body.display-mode .broutine{background:rgba(255,253,247,.75);border:1px solid rg
 .sh-cup{position:absolute; bottom:26px; width:26%; height:104px; background:linear-gradient(180deg,#e0996f,#b85c38); border-radius:14px 14px 20px 20px; box-shadow:inset 0 -12px 0 rgba(0,0,0,.12), inset 0 8px 0 rgba(255,255,255,.25); transition:left .38s ease, transform .3s ease; cursor:pointer; z-index:2;}
 .sh-cup.up{transform:translateY(-52px);}
 .sh-ball{position:absolute; bottom:30px; width:26%; text-align:center; font-size:2.1rem; z-index:1; transition:left .38s ease;}
+/* No double-tap zoom delay/gesture at the root; scrolling still pans. */
+html,body{touch-action:manipulation}
 </style>
 </head>
 <body>
@@ -1711,6 +1713,11 @@ function render(){
     }catch(e){ console.warn("render:progress",e); }
   });
 }
+/* Zoom lock: no pinch, double-tap, or ctrl-wheel zoom in the app UI. */
+document.addEventListener("gesturestart",e=>e.preventDefault(),{passive:false});
+document.addEventListener("gesturechange",e=>e.preventDefault(),{passive:false});
+document.addEventListener("dblclick",e=>e.preventDefault());
+window.addEventListener("wheel",e=>{ if(e.ctrlKey) e.preventDefault(); },{passive:false});
 async function boot(){
   $("setup-screen").classList.add("hidden");
   $("app").classList.remove("hidden");
