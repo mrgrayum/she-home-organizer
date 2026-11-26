@@ -1016,8 +1016,8 @@ function processGameTriggers(mid){
   const pg=window._pendingGame; window._pendingGame=null;
   if(!mid||!isDisplayMode()||!gamesEnabled()) return;
   let added=false;
-  if(pg&&pg.surprise&&pg.mid===mid){ window._gameQueue.push({mid:mid,kind:"surprise"}); added=true; }
   if(memberRemaining(mid)===0&&memberStars(mid)>0){ window._gameQueue.push({mid:mid,kind:"alldone"}); added=true; }
+  else if(pg&&pg.surprise&&pg.mid===mid){ window._gameQueue.push({mid:mid,kind:"surprise"}); added=true; }
   if(added) setTimeout(showNextInvite,1100);
 }
 function gameOverlayEl(){ return document.getElementById("game-overlay"); }
