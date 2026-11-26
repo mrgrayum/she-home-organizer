@@ -171,6 +171,37 @@ body.display-mode .bcol-scroll{flex:1;min-height:0;overflow-y:auto;scrollbar-wid
 body.display-mode .bcol-scroll::-webkit-scrollbar{display:none;width:0;height:0;}
 body.display-mode .bcol .taskrow{background:#fffdf7;border:1px solid rgba(122,95,67,.10);border-radius:16px;box-shadow:0 2px 8px rgba(120,85,40,.07);margin-bottom:.55rem;padding:.8rem .7rem;}
 body.display-mode .broutine{background:rgba(255,253,247,.75);border:1px solid rgba(122,95,67,.10);border-radius:14px;padding:.45rem .6rem;margin-bottom:.55rem;}
+/* Reward games */
+#game-overlay{position:fixed; inset:0; z-index:400; background:rgba(59,42,28,.55); display:none; align-items:center; justify-content:center; padding:1rem;}
+#game-overlay.show{display:flex}
+.game-card{background:linear-gradient(180deg,#fffaf1,#fdf3e3); border-radius:22px; max-width:680px; width:100%; max-height:94dvh; overflow:auto; padding:1.1rem 1.2rem 1.3rem; box-shadow:0 18px 50px rgba(59,42,28,.35); color:var(--ink,#3b2a1c);}
+.game-invite{text-align:center; padding:1rem .5rem;}
+.game-big{font-size:3.4rem; line-height:1;}
+.game-invite h2{margin:.5rem 0 .3rem; font-family:Georgia,'Times New Roman',serif; color:#503a26;}
+.game-head{display:flex; align-items:center; gap:.6rem;}
+.game-head b{font-size:1.2rem; color:#503a26;}
+.game-head .game-x{margin-left:auto; font-size:1.15rem; width:44px; height:44px;}
+.game-timebar{height:6px; border-radius:99px; background:rgba(80,58,38,.15); margin:.55rem 0 .8rem; overflow:hidden;}
+#game-timefill{height:100%; width:100%; background:var(--terra,#c96f4a); border-radius:99px;}
+.game-status{text-align:center; font-weight:700; color:#503a26; margin-bottom:.5rem; font-size:1.05rem;}
+.game-canvas{display:block; margin:0 auto; background:#fffdf8; border:1px solid rgba(80,58,38,.18); border-radius:14px; max-width:100%; height:auto; touch-action:none;}
+.game-canvas.hm{background:transparent; border:none;}
+.st-field{position:relative; height:340px; background:#fffdf8; border:1px solid rgba(80,58,38,.18); border-radius:14px; overflow:hidden;}
+.st-star{position:absolute; font-size:2.6rem; background:none; border:none; cursor:pointer; padding:6px; line-height:1; -webkit-user-select:none; user-select:none;}
+.hm-word{text-align:center; font-size:1.9rem; letter-spacing:.28em; font-weight:700; color:#503a26; margin:.4rem 0;}
+.hm-keys{display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin-top:.5rem;}
+.hm-key{width:44px; height:48px; border-radius:10px; border:1px solid rgba(80,58,38,.25); background:#fffdf8; font-size:1.05rem; font-weight:700; color:#503a26; cursor:pointer;}
+.hm-key.good{background:#dcead9; border-color:#5b8a72;}
+.hm-key.bad{background:#f3d9d2; opacity:.55;}
+.hm-key:disabled{cursor:default;}
+.mm-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:10px; max-width:440px; margin:0 auto;}
+.mm-card{height:76px; border-radius:14px; border:1px solid rgba(80,58,38,.25); background:linear-gradient(180deg,#e8b48f,#d98a68); font-size:2rem; cursor:pointer; color:#503a26;}
+.mm-card.up,.mm-card.got{background:#fffdf8;}
+.mm-card.got{border-color:#5b8a72; box-shadow:inset 0 0 0 2px #5b8a72;}
+.sh-stage{position:relative; height:190px; max-width:520px; margin:0 auto;}
+.sh-cup{position:absolute; bottom:26px; width:26%; height:104px; background:linear-gradient(180deg,#e0996f,#b85c38); border-radius:14px 14px 20px 20px; box-shadow:inset 0 -12px 0 rgba(0,0,0,.12), inset 0 8px 0 rgba(255,255,255,.25); transition:left .38s ease, transform .3s ease; cursor:pointer; z-index:2;}
+.sh-cup.up{transform:translateY(-52px);}
+.sh-ball{position:absolute; bottom:30px; width:26%; text-align:center; font-size:2.1rem; z-index:1; transition:left .38s ease;}
 </style>
 </head>
 <body>
@@ -348,6 +379,7 @@ body.display-mode .broutine{background:rgba(255,253,247,.75);border:1px solid rg
 
 <button id="display-gear" class="display-gear" onclick="displayExit()" title="Parent access">⚙️</button>
 <div class="modal-bg" id="modal-bg"><div class="modal" id="modal"></div></div>
+<div id="game-overlay"></div>
 <div class="toast" id="toast"></div>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -494,7 +526,7 @@ async function saveCard(card){ if(!writeGate()) return;
 }
 
 async function markDone(id){ if(!writeGate()) return;
-  try{ if(isDisplayMode()){ const c0=cards.find(x=>x.id===id); if(c0&&c0.who&&!isDoneToday(c0)){ const ev=window.event, t=ev&&ev.target&&ev.target.getBoundingClientRect?ev.target.getBoundingClientRect():null; window._pendingCeleb={mid:c0.who, x:t?t.left+t.width/2:innerWidth/2, y:t?t.top+t.height/2:innerHeight/2}; } } }catch(e){}
+  try{ if(isDisplayMode()){ const c0=cards.find(x=>x.id===id); if(c0&&c0.who&&!isDoneToday(c0)){ const ev=window.event, t=ev&&ev.target&&ev.target.getBoundingClientRect?ev.target.getBoundingClientRect():null; window._pendingCeleb={mid:c0.who, x:t?t.left+t.width/2:innerWidth/2, y:t?t.top+t.height/2:innerHeight/2}; if(gamesEnabled()&&c0.game) window._pendingGame={mid:c0.who, surprise:true}; } } }catch(e){}
   const t=todayStr();
   await dayRef().set({done:Object.assign({},(dayDoc&&dayDoc.done)||{},{[id]:true})},{merge:true});
   const c=cards.find(c=>c.id===id);
@@ -776,6 +808,7 @@ window.editTodo=id=>{
     +'<label>Title</label><input id="f-title" value="'+esc(c.title)+'">'
     +'<div style="width:120px"><label>Minutes</label><input id="f-min" type="number" min="0" value="'+(c.minutes||"")+'"></div>'
     +(fam().length?'<label>Belongs to</label><select id="f-ewho">'+whoOptions(c.who)+'</select>':"")
+    +'<label class="disp-member" style="margin-top:.35rem"><input type="checkbox" id="f-game"'+(c.game?" checked":"")+' style="width:22px;height:22px;flex:none"> 🎮 Surprise game after this to-do <span class="progress-note">— panel only; kids can\'t see this</span></label>'
     +'<label>Notes</label><textarea id="f-notes" rows="2">'+esc(c.notes||"")+'</textarea>'
     +'<div class="btnrow"><button class="btn" onclick="saveTodoEdit(\''+id+'\')">Save</button><button class="btn secondary" onclick="doRefile(\''+id+'\')">Park…</button>'
     +'<button class="btn ghost" onclick="delCard(\''+id+'\')">Delete</button>'
@@ -784,7 +817,7 @@ window.editTodo=id=>{
 window.saveTodoEdit=async id=>{
   const t=$("f-title").value.trim(); if(!t){ toast("Give it a title first."); return; }
   closeModal();
-  await saveCard({id:id,title:t,category:"todo",minutes:+$("f-min").value||0,notes:$("f-notes").value.trim(),who:(($("f-ewho")&&$("f-ewho").value)||null),cadence:"once",day:null,dueDate:""}).catch(e=>toast("Couldn\'t save \-\ check connection."));
+  await saveCard({id:id,title:t,category:"todo",game:!!(($("f-game")&&$("f-game").checked)),minutes:+$("f-min").value||0,notes:$("f-notes").value.trim(),who:(($("f-ewho")&&$("f-ewho").value)||null),cadence:"once",day:null,dueDate:""}).catch(e=>toast("Couldn\'t save \-\ check connection."));
 };
 window.todoMode=on=>{ ["f-cadrow","f-dayrow","f-duerow","f-daywrap","f-duerow"].forEach(id=>{ const el=$(id); if(el) el.style.display=on?"none":""; }); };
 window.catMode=cat=>{
@@ -831,6 +864,7 @@ window.editCard=id=>{
     +'<label>Title</label><input id="f-title" value="'+esc(c.title)+'" placeholder="e.g. Wipe the microwave">'
     +'<label>Divider (category)</label><select id="f-cat" onchange="catMode(this.value)">'+Object.keys(CATS).filter(k=>k!=="todo").map(k=>'<option value="'+k+'"'+(c.category===k?" selected":"")+'>'+CATS[k]+'</option>').join("")+'</select>'
     +(fam().length?'<label>Belongs to</label><select id="f-who">'+whoOptions(c.who)+'</select>':"")
+    +'<label class="disp-member" style="margin-top:.35rem"><input type="checkbox" id="f-game"'+(c.game?" checked":"")+' style="width:22px;height:22px;flex:none"> 🎮 Surprise game after this card <span class="progress-note">— panel only; kids can\'t see this</span></label>'
     +'<div class="row-between"><div style="flex:1"><label>Room / zone</label><input id="f-room" value="'+esc(c.room||"")+'" placeholder="Kitchen"></div>'
     +'<div style="width:110px"><label>Minutes</label><input id="f-min" type="number" min="0" value="'+(c.minutes||"")+'"></div></div>'
         +'<div id="f-dayrow"><label id="f-daylabel">Day of week</label><select id="f-day"><option value="">—</option>'+DAY_KEYS.map(k2=>'<option value="'+k2+'"'+(c.day===k2?" selected":"")+'>'+DAY_NAMES[k2]+'</option>').join("")+'</select></div>'
@@ -860,7 +894,7 @@ window.saveCardForm=async id=>{
     { id:id||undefined,
     title:title, category:_cat, room:$("f-room").value.trim(),
     minutes:+$("f-min").value||0, cadence:cadence, day:day,
-    dueDate:dueDate, monthWeek:monthWeek, notes:$("f-notes").value.trim(), who:(($("f-who")&&$("f-who").value)||null), active:true });
+    dueDate:dueDate, monthWeek:monthWeek, notes:$("f-notes").value.trim(), game:!!(($("f-game")&&$("f-game").checked)), who:(($("f-who")&&$("f-who").value)||null), active:true });
   closeModal();
   await saveCard(card).catch(e=>toast("Couldn't save — check connection."));
   toast("Card filed. 🗂️");
@@ -974,6 +1008,216 @@ function routineDayKey(d){ return DAY_KEYS[(d||new Date()).getDay()]; }
 function routineDue(r,d){ return !!r&&(!r.day||r.day===routineDayKey(d)); }
 function routineWhenLabel(r){ return (r&&r.day&&DAY_NAMES[r.day])?DAY_NAMES[r.day]+"s":""; }
 function routineDayOptions(sel){ const days=["mon","tue","wed","thu","fri","sat","sun"]; return '<option value=""'+(!sel?" selected":"")+'>Everyday</option>'+days.map(k=>'<option value="'+k+'"'+(sel===k?" selected":"")+'>'+DAY_NAMES[k]+' only</option>').join(""); }
+/* ---------------- REWARD GAMES (panel only) ---------------- */
+function gamesEnabled(){ const cfg=displayCfg(); return !cfg||cfg.games!==false; }
+function gameTone(f,d,type){ if(displaySound()==="off") return; try{ const AC=window.AudioContext||window.webkitAudioContext; if(!AC) return; const ctx=window._gameAC||(window._gameAC=new AC()); if(ctx.state==="suspended") ctx.resume(); const t=ctx.currentTime+0.01; const o=ctx.createOscillator(), gn=ctx.createGain(); o.type=type||"sine"; o.frequency.value=f; gn.gain.setValueAtTime(0.0001,t); gn.gain.exponentialRampToValueAtTime(0.07,t+0.02); gn.gain.exponentialRampToValueAtTime(0.0001,t+(d||0.15)); o.connect(gn); gn.connect(ctx.destination); o.start(t); o.stop(t+(d||0.15)+0.05); }catch(e){} }
+window._gameQueue=[]; window._gameActive=false; window._gameTeardown=null; window._gameCapTimer=null; window._inviteTimer=null;
+function processGameTriggers(mid){
+  const pg=window._pendingGame; window._pendingGame=null;
+  if(!mid||!isDisplayMode()||!gamesEnabled()) return;
+  let added=false;
+  if(pg&&pg.surprise&&pg.mid===mid){ window._gameQueue.push({mid:mid,kind:"surprise"}); added=true; }
+  if(memberRemaining(mid)===0&&memberStars(mid)>0){ window._gameQueue.push({mid:mid,kind:"alldone"}); added=true; }
+  if(added) setTimeout(showNextInvite,1100);
+}
+function gameOverlayEl(){ return document.getElementById("game-overlay"); }
+function showNextInvite(){
+  if(window._gameActive) return;
+  const q=window._gameQueue; if(!q||!q.length) return;
+  const inv=q[0]; const m=memberById(inv.mid); const name=m?m.name:"";
+  const ov=gameOverlayEl(); if(!ov) return;
+  window._gameActive=true;
+  ov.innerHTML='<div class="game-card"><div class="game-invite">'
+    +'<div class="game-big">🎮</div>'
+    +(inv.kind==="alldone"
+      ? '<h2>All done, '+esc(name)+'! 🎉</h2><p>You finished everything in your column — you earned a game!</p>'
+      : '<h2>Surprise, '+esc(name)+'!</h2><p>That one was hiding a game. You earned it!</p>')
+    +'<div class="btnrow" style="justify-content:center"><button class="btn sage" style="font-size:1.15rem;padding:.8rem 1.6rem" onclick="gamePlay()">▶ Play a game</button>'
+    +'<button class="btn ghost" onclick="gameDecline()">No thanks</button></div></div></div>';
+  ov.classList.add("show");
+  celebSound();
+  clearTimeout(window._inviteTimer);
+  window._inviteTimer=setTimeout(()=>{ gameDecline(); },30000);
+}
+window.gameDecline=()=>{ window._gameQueue.shift(); closeGameOverlay(); if(window._gameQueue.length) setTimeout(showNextInvite,700); };
+window.gameClose=()=>{ window._gameQueue.shift(); closeGameOverlay(); if(window._gameQueue.length) setTimeout(showNextInvite,700); };
+function closeGameOverlay(){
+  clearTimeout(window._inviteTimer); clearInterval(window._gameCapTimer); window._gameCapTimer=null;
+  if(window._gameTeardown){ try{ window._gameTeardown(); }catch(e){} window._gameTeardown=null; }
+  const ov=gameOverlayEl(); if(ov){ ov.classList.remove("show"); ov.innerHTML=""; }
+  window._gameActive=false;
+}
+window.gamePlay=()=>{
+  clearTimeout(window._inviteTimer);
+  const inv=window._gameQueue[0]; const m=inv?memberById(inv.mid):null;
+  const g=GAMES[Math.floor(Math.random()*GAMES.length)];
+  const ov=gameOverlayEl(); if(!ov) return;
+  ov.innerHTML='<div class="game-card"><div class="game-head"><b>'+g.title+'</b><span class="progress-note">'+(m?esc(m.name):"")+'</span><button class="iconbtn game-x" onclick="gameClose()" title="Close game">✕</button></div>'
+    +'<div class="game-timebar"><div id="game-timefill"></div></div><div id="game-host"></div></div>';
+  ov.classList.add("show");
+  const host=document.getElementById("game-host");
+  const api={ finish:(txt)=>gameFinish(txt) };
+  try{ window._gameTeardown=g.start(host,api)||null; }catch(e){ gameFinish("That game hit a snag — nice work anyway!"); return; }
+  const t0=Date.now(), cap=5*60*1000;
+  clearInterval(window._gameCapTimer);
+  window._gameCapTimer=setInterval(()=>{
+    const left=cap-(Date.now()-t0); const fill=document.getElementById("game-timefill");
+    if(fill) fill.style.width=Math.max(0,left/cap*100)+"%";
+    if(left<=0) gameFinish("Time's up! Great playing. ⏰");
+  },250);
+};
+function gameFinish(txt){
+  if(window._gameTeardown){ try{ window._gameTeardown(); }catch(e){} window._gameTeardown=null; }
+  clearInterval(window._gameCapTimer); window._gameCapTimer=null;
+  const host=document.getElementById("game-host"); if(!host) return;
+  host.innerHTML='<div class="game-invite"><div class="game-big">⭐</div><h2>'+esc(txt)+'</h2><div class="btnrow" style="justify-content:center"><button class="btn sage" style="font-size:1.1rem;padding:.7rem 1.5rem" onclick="gameClose()">Done</button></div></div>';
+  gameTone(1319,0.25); setTimeout(()=>gameTone(1568,0.35),140);
+  clearTimeout(window._inviteTimer);
+  window._inviteTimer=setTimeout(()=>{ if(window._gameActive) gameClose(); },9000);
+}
+function gameBreakout(host,api){
+  host.innerHTML='<div class="game-status" id="bk-status"></div><canvas id="bk-cv" width="640" height="420" class="game-canvas"></canvas><p class="progress-note" style="text-align:center;margin:.3rem 0 0">Drag to slide the paddle.</p>';
+  const cv=host.querySelector("#bk-cv"), ctx=cv.getContext("2d");
+  const W=640,H=420, rows=5, cols=8, bw=70, bh=20, gap=6, top=54, left0=(W-(cols*bw+(cols-1)*gap))/2;
+  const colors=["#c96f4a","#d9a441","#5b8a72","#4d96a9","#a86ba8"];
+  let bricks=[]; for(let r=0;r<rows;r++) for(let c=0;c<cols;c++) bricks.push({x:left0+c*(bw+gap), y:top+r*(bh+gap), r:r, on:true});
+  let px=W/2-45, bx=W/2, by=H-60, vx=3.2, vy=-3.6, lives=3, score=0, raf=0, dead=false;
+  const status=host.querySelector("#bk-status");
+  function upd(){ status.textContent="🧱 "+score+" bricks · "+"❤️".repeat(Math.max(0,lives)); }
+  upd();
+  function pt(e){ const r=cv.getBoundingClientRect(); const cx=(e.touches&&e.touches[0])?e.touches[0].clientX:e.clientX; if(cx==null) return; px=Math.max(0,Math.min(W-90,(cx-r.left)/r.width*W-45)); }
+  cv.addEventListener("pointermove",pt); cv.addEventListener("pointerdown",pt); cv.addEventListener("touchmove",pt,{passive:true});
+  function step(){
+    if(dead) return;
+    bx+=vx; by+=vy;
+    if(bx<10){ bx=10; vx=Math.abs(vx); } if(bx>W-10){ bx=W-10; vx=-Math.abs(vx); }
+    if(by<10){ by=10; vy=Math.abs(vy); }
+    if(vy>0&&by+10>=H-24&&by+10<=H-6&&bx>=px-6&&bx<=px+96){ vy=-Math.abs(vy); vx=((bx-(px+45))/45)*4.2; gameTone(660,0.06,"square"); }
+    if(by>H+14){ lives--; upd(); gameTone(220,0.2,"sawtooth"); if(lives<=0){ dead=true; api.finish("Game over — you broke "+score+" bricks!"); return; } bx=W/2; by=H-60; vx=3.2; vy=-3.6; }
+    for(let i=0;i<bricks.length;i++){ const b=bricks[i]; if(b.on&&bx+9>b.x&&bx-9<b.x+bw&&by+9>b.y&&by-9<b.y+bh){ b.on=false; score++; vy=-vy; gameTone(880,0.05,"square"); upd(); break; } }
+    if(score>=rows*cols){ dead=true; api.finish("You cleared every brick! Amazing!"); return; }
+    ctx.clearRect(0,0,W,H);
+    for(let i=0;i<bricks.length;i++){ const b=bricks[i]; if(!b.on) continue; ctx.fillStyle=colors[b.r]; ctx.beginPath(); if(ctx.roundRect) ctx.roundRect(b.x,b.y,bw,bh,5); else ctx.rect(b.x,b.y,bw,bh); ctx.fill(); }
+    ctx.fillStyle="#503a26"; ctx.beginPath(); if(ctx.roundRect) ctx.roundRect(px,H-24,90,12,6); else ctx.rect(px,H-24,90,12); ctx.fill();
+    ctx.fillStyle="#c96f4a"; ctx.beginPath(); ctx.arc(bx,by,9,0,7); ctx.fill();
+    raf=requestAnimationFrame(step);
+  }
+  raf=requestAnimationFrame(step);
+  return ()=>{ dead=true; cancelAnimationFrame(raf); };
+}
+function gameStarTap(host,api){
+  host.innerHTML='<div class="game-status" id="st-status"></div><div id="st-field" class="st-field"></div>';
+  const field=host.querySelector("#st-field"), status=host.querySelector("#st-status");
+  let score=0, secs=45, dead=false; const timers=[];
+  function upd(){ status.textContent="⭐ "+score+" popped · "+secs+"s left"; }
+  upd();
+  function spawn(){
+    if(dead) return;
+    const s=document.createElement("button"); s.className="st-star"; s.type="button"; s.textContent="⭐";
+    s.style.left=(3+Math.random()*86)+"%"; s.style.top=(3+Math.random()*78)+"%";
+    const life=Math.max(650,1150-score*12);
+    const kill=setTimeout(()=>{ s.remove(); },life); timers.push(kill);
+    s.onclick=()=>{ clearTimeout(kill); score++; gameTone(900+Math.random()*500,0.08); s.remove(); upd(); timers.push(setTimeout(spawn,100)); };
+    field.appendChild(s);
+  }
+  for(let i=0;i<3;i++) timers.push(setTimeout(spawn,i*260));
+  const iv=setInterval(()=>{ if(dead) return; secs--; upd(); if(secs<=0){ dead=true; clearInterval(iv); timers.forEach(clearTimeout); api.finish("You popped "+score+" stars!"); } },1000);
+  return ()=>{ dead=true; clearInterval(iv); timers.forEach(clearTimeout); };
+}
+const HANG_WORDS=["APPLE","BANANA","ORANGE","GRAPE","LEMON","PEACH","MELON","BERRY","PIZZA","PASTA","TACO","CAKE","COOKIE","DONUT","POPCORN","SOCCER","FOOTBALL","BASEBALL","TENNIS","HOCKEY","SWIM","BIKE","KITE","BOOK","PENCIL","SCHOOL","TEACHER","FRIEND","FAMILY","BROTHER","SISTER","MOTHER","FATHER","GRANDMA","GRANDPA","DOG","CAT","HORSE","COW","PIG","DUCK","FROG","BEAR","LION","TIGER","ZEBRA","MONKEY","PANDA","KOALA","WHALE","SHARK","SNAKE","BIRD","FISH","TREE","FLOWER","GARDEN","RAIN","SNOW","MOON","STAR","CLOUD","RIVER","OCEAN","BEACH","MOUNTAIN","FOREST","ISLAND","TRAIN","PLANE","BOAT","TRUCK","ROCKET","ROBOT","DRAGON","CASTLE","PIRATE","NINJA","WIZARD","GUITAR","PIANO","DRUM","VIOLIN","DANCE","SMILE","LAUGH","HAPPY","BRAVE","KIND","SMART","SUPER","MAGIC","HERO"];
+function gameHangman(host,api){
+  const word=HANG_WORDS[Math.floor(Math.random()*HANG_WORDS.length)];
+  let wrong=0, over=false; const guessed={};
+  host.innerHTML='<canvas id="hm-cv" width="220" height="200" class="game-canvas hm"></canvas><div id="hm-word" class="hm-word"></div><div class="game-status" id="hm-status"></div><div id="hm-keys" class="hm-keys"></div>';
+  const cv=host.querySelector("#hm-cv"), ctx=cv.getContext("2d");
+  const wordEl=host.querySelector("#hm-word"), status=host.querySelector("#hm-status"), keys=host.querySelector("#hm-keys");
+  function draw(){
+    ctx.clearRect(0,0,220,200); ctx.strokeStyle="#503a26"; ctx.lineWidth=4; ctx.lineCap="round";
+    ctx.beginPath(); ctx.moveTo(20,190); ctx.lineTo(120,190); ctx.moveTo(45,190); ctx.lineTo(45,20); ctx.lineTo(130,20); ctx.lineTo(130,45); ctx.stroke();
+    ctx.lineWidth=3.5;
+    if(wrong>0){ ctx.beginPath(); ctx.arc(130,62,17,0,7); ctx.stroke(); }
+    if(wrong>1){ ctx.beginPath(); ctx.moveTo(130,79); ctx.lineTo(130,125); ctx.stroke(); }
+    if(wrong>2){ ctx.beginPath(); ctx.moveTo(130,92); ctx.lineTo(105,112); ctx.stroke(); }
+    if(wrong>3){ ctx.beginPath(); ctx.moveTo(130,92); ctx.lineTo(155,112); ctx.stroke(); }
+    if(wrong>4){ ctx.beginPath(); ctx.moveTo(130,125); ctx.lineTo(110,160); ctx.stroke(); }
+    if(wrong>5){ ctx.beginPath(); ctx.moveTo(130,125); ctx.lineTo(150,160); ctx.stroke(); }
+  }
+  function renderWord(){ wordEl.textContent=word.split("").map(ch=>guessed[ch]?ch:"_").join(" "); }
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").forEach(L=>{
+    const b=document.createElement("button"); b.className="hm-key"; b.type="button"; b.textContent=L;
+    b.onclick=()=>{ if(over||guessed[L]) return; guessed[L]=true; b.disabled=true;
+      if(word.indexOf(L)>=0){ b.classList.add("good"); gameTone(1047,0.08); renderWord(); if(word.split("").every(ch=>guessed[ch])){ over=true; api.finish("You guessed it: "+word+"!"); } }
+      else { b.classList.add("bad"); wrong++; gameTone(233,0.15,"sawtooth"); draw(); status.textContent=(6-wrong)+" guesses left"; if(wrong>=6){ over=true; api.finish("So close! The word was "+word+"."); } }
+    };
+    keys.appendChild(b);
+  });
+  status.textContent="6 guesses left"; draw(); renderWord();
+  return ()=>{ over=true; };
+}
+function gameMemory(host,api){
+  const EM=["🍎","🚗","🐶","🌟","⚽","🍕","🦋","🎸"].sort(()=>Math.random()-0.5).slice(0,6);
+  const deck=EM.concat(EM).sort(()=>Math.random()-0.5);
+  host.innerHTML='<div class="game-status" id="mm-status"></div><div id="mm-grid" class="mm-grid"></div>';
+  const grid=host.querySelector("#mm-grid"), status=host.querySelector("#mm-status");
+  let first=null, lock=false, moves=0, matched=0, dead=false;
+  function upd(){ status.textContent="Moves: "+moves+" · Pairs: "+matched+"/6"; }
+  upd();
+  deck.forEach(em=>{
+    const b=document.createElement("button"); b.className="mm-card"; b.type="button"; b.dataset.em=em;
+    b.onclick=()=>{ if(dead||lock||b.classList.contains("up")||b.classList.contains("got")) return;
+      b.classList.add("up"); b.textContent=em; gameTone(760,0.05);
+      if(!first){ first=b; return; }
+      moves++; upd();
+      if(first.dataset.em===em){ first.classList.add("got"); b.classList.add("got"); first=null; matched++; gameTone(1175,0.12); upd(); if(matched===6){ dead=true; setTimeout(()=>api.finish("All 6 pairs in "+moves+" moves!"),450); } }
+      else { lock=true; const f=first; first=null; setTimeout(()=>{ f.classList.remove("up"); b.classList.remove("up"); f.textContent=""; b.textContent=""; lock=false; },750); }
+    };
+    grid.appendChild(b);
+  });
+  return ()=>{ dead=true; };
+}
+function gameShell(host,api){
+  host.innerHTML='<div class="game-status" id="sh-status"></div><div id="sh-stage" class="sh-stage"></div><p class="progress-note" style="text-align:center" id="sh-hint"></p>';
+  const stage=host.querySelector("#sh-stage"), status=host.querySelector("#sh-status"), hint=host.querySelector("#sh-hint");
+  const SLOT=[4,37,70];
+  let dead=false, timers=[], round=0, correct=0, busy=true, ballCup=0;
+  const slotOf=[0,1,2];
+  const ball=document.createElement("div"); ball.className="sh-ball"; ball.textContent="⭐"; stage.appendChild(ball);
+  const cups=[];
+  for(let i=0;i<3;i++){ const c=document.createElement("div"); c.className="sh-cup"; c.style.left=SLOT[i]+"%"; stage.appendChild(c); cups.push(c); (function(el){ el.addEventListener("click",()=>pick(el)); })(c); }
+  function place(){ cups.forEach((c,i)=>{ c.style.left=SLOT[slotOf[i]]+"%"; }); ball.style.left=SLOT[slotOf[ballCup]]+"%"; }
+  function upd(){ status.textContent="Round "+Math.min(round+1,5)+" of 5 · Found: "+correct; }
+  function later(fn,ms){ timers.push(setTimeout(()=>{ if(!dead) fn(); },ms)); }
+  function cupAtSlot(s){ for(let i=0;i<3;i++) if(slotOf[i]===s) return i; return 0; }
+  function shuffle(n,speed,done){
+    if(dead) return;
+    if(n<=0){ done(); return; }
+    let a=Math.floor(Math.random()*3), b=a; while(b===a) b=Math.floor(Math.random()*3);
+    const ca=cupAtSlot(a), cb=cupAtSlot(b); slotOf[ca]=b; slotOf[cb]=a; place(); gameTone(500,0.05);
+    later(()=>shuffle(n-1,speed,done), speed);
+  }
+  function startRound(){
+    if(dead) return; busy=true; upd();
+    ballCup=Math.floor(Math.random()*3);
+    cups.forEach(c=>c.classList.remove("up")); place();
+    hint.textContent="Watch the star…";
+    later(()=>{ cups[ballCup].classList.add("up"); },400);
+    later(()=>{ cups.forEach(c=>c.classList.remove("up")); },1350);
+    later(()=>{ hint.textContent="Shuffling…"; shuffle(Math.min(4+round,7), Math.max(300,540-round*45), ()=>{ busy=false; hint.textContent="Tap the cup hiding the star!"; }); },1600);
+  }
+  function pick(el){
+    if(dead||busy) return; busy=true;
+    const ci=cups.indexOf(el);
+    cups.forEach(x=>x.classList.add("up")); place();
+    if(ci===ballCup){ correct++; gameTone(1175,0.15); hint.textContent="You found it! 🎉"; }
+    else { gameTone(233,0.2,"sawtooth"); hint.textContent="Not that one — watch closer next round!"; }
+    upd();
+    later(()=>{ round++; if(round>=5){ dead=true; api.finish("You found the star "+correct+" out of 5 times!"); } else startRound(); },1600);
+  }
+  place(); startRound();
+  return ()=>{ dead=true; timers.forEach(clearTimeout); };
+}
+const GAMES=[{id:"breakout",title:"🧱 Breakout",start:gameBreakout},{id:"startap",title:"⭐ Star Tap",start:gameStarTap},{id:"hangman",title:"🔤 Hangman",start:gameHangman},{id:"memory",title:"🧠 Memory Match",start:gameMemory},{id:"shell",title:"👀 Shell Game",start:gameShell}];
+
 function routineComplete(rid){ const r=routines[rid]; if(!r||!r.items||!r.items.length) return false; const checks=(((dayDoc&&dayDoc.routines)||{})[rid])||[]; return r.items.every(i=>checks.includes(i.id)); }
 
 /* ---------------- FAMILY DISPLAY MODE ---------------- */
@@ -1078,13 +1322,16 @@ function renderDisplayArea(){
   el.innerHTML='<p class="progress-note" style="margin-top:0">The wall panel shows only the Board, only for the people checked here \u2014 and only their own cards and routines. Changes reach the panel on their own.</p>'
     +list.map(m=>'<label class="disp-member"><input type="checkbox" data-disp-member="'+m.id+'"'+(sel.includes(m.id)?" checked":"")+' onchange="saveDisplaySettings()"><span style="width:12px;height:12px;border-radius:99px;background:'+m.color+';display:inline-block;flex:none"></span>'+esc(m.name)+'</label>').join("")
     +'<label>Celebration sound</label><select id="disp-sound" onchange="saveDisplaySettings()"><option value="off"'+(snd==="off"?" selected":"")+'>Off</option><option value="chime"'+(snd==="chime"?" selected":"")+'>Chime</option><option value="coin"'+(snd==="coin"?" selected":"")+'>Coin (cha-ching)</option></select>'
+    +'<label class="disp-member"><input type="checkbox" id="disp-games"'+(gamesEnabled()?" checked":"")+' onchange="saveDisplaySettings()"> 🎮 Reward games on the panel</label>'
+    +'<p class="progress-note">Finishing everything in a column earns a game. You can also hide a surprise game behind any one card — set it in that card\'s edit form; the kids can\'t see which cards have one.</p>'
     +'<div class="btnrow">'+(exited?'<button class="btn sage small" onclick="displayGo()">Back to display mode</button>':'<button class="btn secondary small" onclick="displayGo()">Preview display mode on this device</button>')+'</div>'
     +'<p class="progress-note">On the panel, tap the \u2699\uFE0F in the corner and enter the parental PIN to reach the full app. The panel returns to the display on its own at the next reload.</p>';
 }
 window.saveDisplaySettings=()=>{ if(!writeGate()) return;
   const members=Array.from(document.querySelectorAll("[data-disp-member]")).filter(i=>i.checked).map(i=>i.getAttribute("data-disp-member"));
   const sndEl=$("disp-sound"); const sound=sndEl?sndEl.value:"chime";
-  col("settings").doc("main").set({display:{members:members,sound:sound}},{merge:true}).then(()=>toast("Display settings saved. \uD83D\uDCFA")).catch(e=>toast("Couldn't save \u2014 check connection."));
+  const gEl=$("disp-games"); const games=gEl?!!gEl.checked:true;
+  col("settings").doc("main").set({display:{members:members,sound:sound,games:games}},{merge:true}).then(()=>toast("Display settings saved. \uD83D\uDCFA")).catch(e=>toast("Couldn't save \u2014 check connection."));
 };
 window.displayGo=()=>{ try{ localStorage.setItem("sheDisplay","1"); sessionStorage.removeItem("sheDisplayExit"); }catch(e){} location.reload(); };
 window.displayExit=async()=>{ if(!(await pinGate("leave the family display"))) return; try{ sessionStorage.setItem("sheDisplayExit","1"); }catch(e){} location.reload(); };
@@ -1126,7 +1373,7 @@ function renderBoard(){
       +(disp?'<div class="bcol-scroll">'+rowsHtml+routHtml+'</div>':rowsHtml+routHtml+'<button class="btn sage small" style="margin-top:.55rem;width:100%" onclick="addTodoFor(\''+m.id+'\')">\uFF0B To-do</button>')
       +'</div>';
   }).join("");
-  if(disp) consumeCeleb();
+  if(disp){ const gm=(window._pendingGame&&window._pendingGame.mid)||(window._pendingCeleb&&window._pendingCeleb.mid); consumeCeleb(); processGameTriggers(gm); }
 }
 window.addTodoFor=id=>{ window._todoWho=id; addTodo(); window._todoWho=null; };
 function renderWeek(){
@@ -1148,6 +1395,7 @@ function openModalForNew(preset){
     +'<label>Title</label><input id="f-title" value="'+esc(c.title)+'" placeholder="e.g. Wipe the microwave">'
     +'<label>Divider (category)</label><select id="f-cat" onchange="catMode(this.value)">'+Object.keys(CATS).filter(k2=>k2!=="todo").map(k2=>'<option value="'+k2+'"'+(c.category===k2?" selected":"")+'>'+CATS[k2]+'</option>').join("")+'</select>'
     +(fam().length?'<label>Belongs to</label><select id="f-who">'+whoOptions(c.who)+'</select>':"")
+    +'<label class="disp-member" style="margin-top:.35rem"><input type="checkbox" id="f-game"'+(c.game?" checked":"")+' style="width:22px;height:22px;flex:none"> 🎮 Surprise game after this card <span class="progress-note">— panel only; kids can\'t see this</span></label>'
     +'<div class="row-between"><div style="flex:1"><label>Room / zone</label><input id="f-room" value="'+esc(c.room||"")+'" placeholder="Kitchen"></div>'
     +'<div style="width:110px"><label>Minutes</label><input id="f-min" type="number" min="0" value="'+(c.minutes||"")+'"></div></div>'
         +'<div id="f-dayrow"><label id="f-daylabel">Day of week</label><select id="f-day"><option value="">—</option>'+DAY_KEYS.map(k2=>'<option value="'+k2+'"'+(c.day===k2?" selected":"")+'>'+DAY_NAMES[k2]+'</option>').join("")+'</select></div>'
