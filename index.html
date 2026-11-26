@@ -134,7 +134,7 @@ code.cfg{background:#f1e9d8; padding:.15rem .4rem; border-radius:6px; font-size:
 .display-gear{display:none;position:fixed;right:12px;bottom:12px;z-index:80;width:46px;height:46px;border-radius:99px;border:1px solid var(--line);background:var(--card);opacity:.5;font-size:20px;box-shadow:var(--shadow);cursor:pointer}
 body.display-mode .display-gear{display:block}
 body.display-mode .tabs{display:none}
-body.display-mode .topbar h1{font-size:1.15rem}
+body.display-mode .topbar h1{display:none}
 body.display-mode #view-board>.kicker,body.display-mode #view-board>p.progress-note{display:none}
 body.display-mode .bcol{position:relative}
 body.display-mode .bcol-head b{font-size:1.5rem}
@@ -968,6 +968,8 @@ window.toggleBoardRoutine=rid=>{ window._boardOpen[rid]=!window._boardOpen[rid];
 window._todayOpen=window._todayOpen||{};
 window.toggleTodayRoutine=rid=>{ window._todayOpen[rid]=!window._todayOpen[rid]; render(); };
 
+function routineComplete(rid){ const r=routines[rid]; if(!r||!r.items||!r.items.length) return false; const checks=(((dayDoc&&dayDoc.routines)||{})[rid])||[]; return r.items.every(i=>checks.includes(i.id)); }
+
 /* ---------------- FAMILY DISPLAY MODE ---------------- */
 function displayCfg(){ return (settingsDoc&&settingsDoc.display)||null; }
 function displayMembers(){
@@ -1109,7 +1111,7 @@ function renderBoard(){
     const deck=onDeck().filter(c=>mine(c.who));
     const done=all.filter(isDoneToday);
     const pct=all.length?Math.round(done.length/all.length*100):100;
-    const rids=Object.keys(routines).sort((a,b)=>routineOrderPos(a)-routineOrderPos(b)).filter(rid=>mine(routines[rid].who));
+    const rids=Object.keys(routines).sort((a,b)=>routineOrderPos(a)-routineOrderPos(b)).filter(rid=>mine(routines[rid].who)&&(!disp||!routineComplete(rid)));
     const rowsHtml=deck.length?deck.map(disp?displayRow:boardRow).join(""):'<div class="progress-note" style="padding:.3rem 0">All clear \uD83C\uDF89</div>';
     const routHtml=rids.length?rids.map(boardRoutine).join(""):"";
     const headHtml=disp?'<span class="davatar" style="background:'+m.color+'">'+esc((m.name||"?").trim().charAt(0).toUpperCase())+'</span>':'<span style="width:10px;height:10px;border-radius:99px;background:'+m.color+';display:inline-block;flex:none"></span>';
