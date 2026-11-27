@@ -315,6 +315,18 @@ html,body{touch-action:manipulation}
         </div>
         <div id="hist-body"><div class="empty">Loading…</div></div>
       </div>
+      <div class="card">
+        <div class="row-between" style="align-items:center">
+          <h3 style="margin:0">Week review</h3>
+          <div style="display:flex;gap:.35rem;align-items:center">
+            <button class="iconbtn" onclick="reviewNav(-1)" title="Previous week">‹</button>
+            <b id="review-week-label" style="font-size:.85rem">This week</b>
+            <button class="iconbtn" id="review-next" onclick="reviewNav(1)" title="Next week">›</button>
+          </div>
+        </div>
+        <p class="progress-note" style="margin:.35rem 0">What was scheduled for each person that week — and whether it got done. Worked out from the cards as they are now, so a card that was parked that week can show as missed.</p>
+        <div id="review-body"><div class="empty">Loading…</div></div>
+      </div>
     </section>
 
     <!-- SETTINGS -->
@@ -1378,6 +1390,90 @@ function updateRotWho(){
   hint.textContent=txt;
 }
 
+/* ---------------- WEEK REVIEW ---------------- */
+let reviewStart=null;
+function dayDateOf(ds){ return new Date(+ds.slice(0,4), +ds.slice(5,7)-1, +ds.slice(8,10)); }
+function weekStartDs(ds){ return addDaysStr(ds, -dayDateOf(ds).getDay()); }
+function ordinalMatchOn(dom, n, ds){
+  const occ=Math.ceil(dom/7);
+  if(occ===n) return true;
+  if(n>=5 && occ===4){ const dim=new Date(+ds.slice(0,4), +ds.slice(5,7), 0).getDate(); return dom+7>dim; }
+  return false;
+}
+function dueOn(c, ds){
+  if(!c || !c.active || c.category==="routine" || c.category==="anytime" || c.category==="todo") return false;
+  const wd=DAY_KEYS[dayDateOf(ds).getDay()], dom=dayDateOf(ds).getDate();
+  if(c.category==="day") return c.dueDate===ds;
+  if(c.cadence==="daily") return true;
+  if(c.category==="zones" && c.monthWeek) return Math.ceil(dom/7)===+c.monthWeek;
+  if(c.cadence==="monthly" && c.day && c.monthWeek) return c.day===wd && ordinalMatchOn(dom, +c.monthWeek, ds);
+  if(c.day===wd && c.cadence!=="monthly") return true;
+  if(c.cadence==="monthly") return dom===1;
+  return false;
+}
+function cardCreatedDs(c){
+  try{
+    if(!c || !c.createdAt) return null;
+    if(typeof c.createdAt.toDate==="function"){ const d=c.createdAt.toDate(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+    if(typeof c.createdAt==="string") return c.createdAt.slice(0,10);
+  }catch(e){}
+  return null;
+}
+window.reviewNav=dir=>{
+  const cur=reviewStart||weekStartDs(todayStr());
+  const next=addDaysStr(cur, dir*7);
+  if(next>weekStartDs(todayStr())) return;
+  reviewStart=next===weekStartDs(todayStr())?null:next;
+  renderReview();
+};
+async function renderReview(){
+  const body=$("review-body"); if(!body) return;
+  const start=reviewStart||weekStartDs(todayStr());
+  const lbl=$("review-week-label");
+  if(lbl) lbl.textContent=fmtDay(start)+" – "+fmtDay(addDaysStr(start,6))+(start===weekStartDs(todayStr())?" · This week":"");
+  const nx=$("review-next"); if(nx) nx.disabled=addDaysStr(start,7)>weekStartDs(todayStr());
+  const days=[]; for(let i=0;i<7;i++) days.push(addDaysStr(start,i));
+  const today=todayStr();
+  const docs={};
+  for(const ds of days){ docs[ds]=await histDayDoc(ds).catch(()=>null); }
+  if((reviewStart||weekStartDs(todayStr()))!==start) return;
+  const doneOn=(id,ds)=>!!(docs[ds]&&docs[ds].done&&docs[ds].done[id]);
+  const items=[];
+  cards.forEach(c=>{
+    if(!c.active || c.category==="routine" || c.category==="anytime" || c.category==="todo") return;
+    const created=cardCreatedDs(c);
+    const occ=days.filter(ds=>ds<=today && dueOn(c,ds) && (!created || ds>=created));
+    if(!occ.length) return;
+    if(c.cadence==="daily"){
+      occ.forEach(ds=>items.push({c:c, ds:ds, holder:effWho(c,ds), done:doneOn(c.id,ds), open:false}));
+    } else {
+      const dd=days.find(ds=>doneOn(c.id,ds));
+      items.push({c:c, ds:occ[0], dueDays:occ, holder:effWho(c,occ[0]), done:!!dd, doneDs:dd||null, open:(c.category==="day" && !dd)});
+    }
+  });
+  const groups=new Map();
+  items.forEach(it=>{ const k=it.holder||"__house"; if(!groups.has(k)) groups.set(k,[]); groups.get(k).push(it); });
+  const order=fam().map(m=>m.id); if(groups.has("__house")) order.push("__house");
+  const dayName=ds=>DAY_NAMES[DAY_KEYS[dayDateOf(ds).getDay()]];
+  const rowHtml=it=>{
+    let when;
+    if(it.c.category==="zones") when="Week "+(+it.c.monthWeek)+" of the month";
+    else if(it.dueDays && it.dueDays.length>1) when=dayName(it.dueDays[0])+"–"+dayName(it.dueDays[it.dueDays.length-1]);
+    else when=dayName(it.ds);
+    let status, icon;
+    if(it.done){ icon="✅"; status=(it.doneDs&&it.doneDs!==it.ds)?("done "+dayName(it.doneDs)):"done"; }
+    else if(it.open){ icon="↪️"; status="still open — rolls forward"; }
+    else { icon="❌"; status="missed"; }
+    return '<div class="taskrow"><span style="flex:none">'+icon+'</span><div class="tt"><b>'+esc(it.c.title)+'</b><div class="progress-note">'+when+' · '+status+(it.c.minutes?' · '+it.c.minutes+' min':"")+'</div></div></div>';
+  };
+  body.innerHTML=items.length?order.filter(k=>groups.has(k)).map(k=>{
+    const list=groups.get(k).slice().sort((a,b)=>a.ds<b.ds?-1:1);
+    const doneN=list.filter(i=>i.done).length;
+    const name=k==="__house"?"Household (shared)":((memberById(k)||{}).name||"?");
+    return '<div style="margin-top:.7rem"><div class="row-between"><b>'+esc(name)+'</b><span class="progress-note">'+doneN+' of '+list.length+' done</span></div>'+list.map(rowHtml).join("")+'</div>';
+  }).join(""):'<p class="progress-note" style="margin:.35rem 0">Nothing was scheduled this week.</p>';
+}
+
 function routineComplete(rid){ const r=routines[rid]; if(!r||!r.items||!r.items.length) return false; const checks=(((dayDoc&&dayDoc.routines)||{})[rid])||[]; return r.items.every(i=>checks.includes(i.id)); }
 
 /* ---------------- FAMILY DISPLAY MODE ---------------- */
@@ -1635,6 +1731,7 @@ window.undoDone=async id=>{
 };
 async function renderProgress(){
   renderHistory();
+  renderReview();
   let streak=0;
   for(let i=0;i<60;i++){
     const ds=addDaysStr(todayStr(),-i);
