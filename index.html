@@ -1427,6 +1427,7 @@ window.reviewNav=dir=>{
   const next=addDaysStr(cur, dir*7);
   if(next>weekStartDs(todayStr())) return;
   reviewStart=next===weekStartDs(todayStr())?null:next;
+  const rb=$("review-body"); if(rb) rb.innerHTML='<div class="empty">Loading…</div>';
   renderReview();
 };
 async function renderReview(){
