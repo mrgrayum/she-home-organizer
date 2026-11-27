@@ -531,17 +531,18 @@ async function saveCard(card){ if(!writeGate()) return;
 }
 
 async function markDone(id){ if(!writeGate()) return;
-  try{ if(isDisplayMode()){ const c0=cards.find(x=>x.id===id); if(c0&&c0.who&&!isDoneToday(c0)){ const ev=window.event, t=ev&&ev.target&&ev.target.getBoundingClientRect?ev.target.getBoundingClientRect():null; window._pendingCeleb={mid:c0.who, x:t?t.left+t.width/2:innerWidth/2, y:t?t.top+t.height/2:innerHeight/2}; if(gamesEnabled()&&c0.game) window._pendingGame={mid:c0.who, surprise:true}; } } }catch(e){}
+  try{ if(isDisplayMode()){ const c0=cards.find(x=>x.id===id); if(c0&&effWho(c0)&&!isDoneToday(c0)){ const ev=window.event, t=ev&&ev.target&&ev.target.getBoundingClientRect?ev.target.getBoundingClientRect():null; window._pendingCeleb={mid:effWho(c0), x:t?t.left+t.width/2:innerWidth/2, y:t?t.top+t.height/2:innerHeight/2}; if(gamesEnabled()&&c0.game) window._pendingGame={mid:effWho(c0), surprise:true}; } } }catch(e){}
   const t=todayStr();
   await dayRef().set({done:Object.assign({},(dayDoc&&dayDoc.done)||{},{[id]:true})},{merge:true});
   const c=cards.find(c=>c.id===id);
   if(c && c.cadence==="once") await col("cards").doc(id).set({doneEver:true},{merge:true});
+  if(c && c.refileUntil && c.refileUntil<=t) await col("cards").doc(id).set({refileDone:t},{merge:true});
   toast("Done! Nice work. 🎉");
 }
 async function refileCard(id, when){ if(!writeGate()) return;
   const t=todayStr();
   let target = when==="tomorrow" ? addDaysStr(t,1) : when==="week" ? addDaysStr(t,3) : addDaysStr(t,7);
-  await col("cards").doc(id).set({refileUntil:target},{merge:true});
+  await col("cards").doc(id).set({refileUntil:target,refileDone:null},{merge:true});
   toast("Parked until "+fmtDay(target)+" \u2014 off your list, not lost. \ud83d\udc9b");
 }
 async function toggleRoutineItem(rid, itemId){ if(!writeGate()) return;
@@ -679,7 +680,11 @@ function dayCards(){
     if(c.category==="anytime") return false;
     if(c.category==="todo"){ if(c.fromBox && c.claimDate!==t) return false; if(c.refileUntil && c.refileUntil>t) return false; return !c.doneEver || isDoneToday(c); }
     if(c.refileUntil && c.refileUntil>t) return false;
-    if(c.refileUntil && c.refileUntil<=t) return !c.doneEver || isDoneToday(c);
+    if(c.refileUntil && c.refileUntil<=t){
+      if(isDoneToday(c)) return true;
+      if(!c.doneEver && !(c.refileDone && c.refileDone>=c.refileUntil)) return true;
+      /* return served (or a finished one-timer): fall through to the normal schedule */
+    }
     if(c.cadence==="daily") return true;
     if(c.category==="zones" && c.monthWeek) return Math.ceil(dom/7)===+c.monthWeek;
     if(c.cadence==="monthly" && c.day && c.monthWeek) return c.day===wd && ordinalMatch(dom,+c.monthWeek);
@@ -706,6 +711,7 @@ function cardMeta(c, noMin){
 }
 
 function pillFor(c){
+  if(c.rotate&&c.rotate.length) return '<span class="pill">🔄 Rotating</span>';
   if(c.category==="basicweek") return '<span class="pill">Week</span>';
   if(c.category==="todo") return '<span class="pill gold">To do</span>';
   return '<span class="pill">'+esc(CATS[c.category]||c.category)+'</span>';
@@ -718,7 +724,7 @@ window.lpEnd=()=>{ if(_lpTimer){ clearTimeout(_lpTimer); _lpTimer=null; } };
 window.rowEdit=id=>{ if(Date.now()<_lpSkipUntil) return; openCardEdit(id); };
 window.openCardEdit=id=>{ const c=cards.find(x=>x.id===id); if(c) editCard(id); };
 function renderToday(){
-  const deck=onDeck().filter(c=>whoVisible(c.who)), all=dayCards().filter(c=>whoVisible(c.who));
+  const deck=onDeck().filter(c=>whoVisible(effWho(c))), all=dayCards().filter(c=>whoVisible(effWho(c)));
   const total=all.reduce((s,c)=>s+(+c.minutes||0),0);
   const doneCards=all.filter(isDoneToday);
   const doneM=doneCards.reduce((s,c)=>s+(+c.minutes||0),0);
@@ -733,11 +739,11 @@ function renderToday(){
       ? '<div class="taskrow"><div style="display:flex;gap:2px">'
         +'<button class="iconbtn ord" onclick="moveCard(\''+c.id+'\',-1)" title="Move up"'+(idx===0?' disabled':'')+'>▲</button>'
         +'<button class="iconbtn ord" onclick="moveCard(\''+c.id+'\',1)" title="Move down"'+(idx===deck.length-1?' disabled':'')+'>▼</button></div>'
-        +'<div class="tt"><b>'+esc(c.title)+'</b>'+whoTag(c.who)+'<div class="progress-note">'+esc(cardMeta(c))+'</div></div>'
+        +'<div class="tt"><b>'+esc(c.title)+'</b>'+whoTag(effWho(c))+'<div class="progress-note">'+esc(cardMeta(c))+'</div></div>'
         +'<span class="minutes">'+(c.minutes?c.minutes+"m":"")+'</span></div>'
       : '<div class="taskrow" onmousedown="lpStart(\''+c.id+'\')" onmouseup="lpEnd()" onmouseleave="lpEnd()" ontouchstart="lpStart(\''+c.id+'\')" ontouchend="lpEnd()" ontouchmove="lpEnd()" oncontextmenu="return false">'
         +'<button class="check" onclick="doDone(\''+c.id+'\')" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()"></button>'
-        +'<div class="tt" onclick="rowEdit(\''+c.id+'\')"><b>'+esc(c.title)+'</b>'+whoTag(c.who)+'<div class="progress-note">'+esc(cardMeta(c))+'</div></div>'
+        +'<div class="tt" onclick="rowEdit(\''+c.id+'\')"><b>'+esc(c.title)+'</b>'+whoTag(effWho(c))+'<div class="progress-note">'+esc(cardMeta(c))+'</div></div>'
         +'<span class="minutes">'+(c.minutes?c.minutes+"m":"")+'</span></div>').join("")
     : '<div class="empty" style="padding:1.2rem;text-align:center"><h3 style="margin:.2rem 0">All clear! 🎉</h3><p class="progress-note">The deck is empty. Enjoy the rest of your day — or pull a card from the box if you\'re feeling ambitious.</p><div class="btnrow" style="justify-content:center"><button class="btn secondary small" onclick="goView(\'cards\')">Browse the card box</button></div></div>';
   // routines snapshot (collapsed; tap to expand and check off)
@@ -754,10 +760,10 @@ function renderToday(){
   }).join("") : '<div class="card"><div class="empty">No routines yet.</div></div>';
 
   const t=todayStr();
-  const parked=cards.filter(c=>c.active && c.category!=="routine" && c.refileUntil && c.refileUntil>t && whoVisible(c.who)).sort((a,b)=>a.refileUntil<b.refileUntil?-1:1);
+  const parked=cards.filter(c=>c.active && c.category!=="routine" && c.refileUntil && c.refileUntil>t && whoVisible(effWho(c))).sort((a,b)=>a.refileUntil<b.refileUntil?-1:1);
   $("parked-wrap").innerHTML = parked.length
     ? '<details class="card"><summary style="cursor:pointer;display:flex;align-items:center;gap:.5rem;min-height:44px"><b>🅿 Parked ('+parked.length+')</b><span class="progress-note">out of sight, not lost</span></summary>'
-      +parked.map(c=>'<div class="taskrow"><div class="tt" onclick="rowEdit(\''+c.id+'\')"><b>'+esc(c.title)+'</b>'+whoTag(c.who)+'<div class="progress-note">back '+(c.refileUntil===addDaysStr(t,1)?"tomorrow":fmtDay(c.refileUntil))+(c.category==="todo"?" · to-do":"")+'</div></div>'
+      +parked.map(c=>'<div class="taskrow"><div class="tt" onclick="rowEdit(\''+c.id+'\')"><b>'+esc(c.title)+'</b>'+whoTag(effWho(c))+'<div class="progress-note">back '+(c.refileUntil===addDaysStr(t,1)?"tomorrow":fmtDay(c.refileUntil))+(c.category==="todo"?" · to-do":"")+'</div></div>'
       +'<button class="btn small secondary" onclick="doUnpark(\''+c.id+'\')" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()">↩ Today</button></div>').join("")+"</details>"
     : '';
 }
@@ -772,7 +778,7 @@ window.toggleOrder=()=>{
   render();
 };
 window.moveCard=(id,dir)=>{ if(!writeGate()) return;
-  const vis=onDeck().filter(c=>whoVisible(c.who)).map(c=>c.id);
+  const vis=onDeck().filter(c=>whoVisible(effWho(c))).map(c=>c.id);
   const ord=normCardOrder();
   const vi=vis.indexOf(id), vj=vi+dir;
   if(vi<0||vj<0||vj>=vis.length) return;
@@ -836,6 +842,9 @@ window.catMode=cat=>{
   show("f-ordrow", cat==="monthly"||cat==="zones");
   show("f-duerow", cat==="day");
   const whoEl=$("f-who"); if(whoEl){ const hideWho=cat==="anytime"; whoEl.style.display=hideWho?"none":""; const lb=whoEl.previousElementSibling; if(lb&&lb.tagName==="LABEL") lb.style.display=hideWho?"none":""; }
+  show("f-rotrow", cat==="basicweek"||cat==="monthly"||cat==="zones");
+  if(!(cat==="basicweek"||cat==="monthly"||cat==="zones")){ const rl=$("f-rotlist"); if(rl) rl.style.display="none"; const rw=$("f-rotwho"); if(rw) rw.style.display="none"; }
+  if($("f-rotate")) rotToggle();
   lbl("f-daylabel","Day of week");
   lbl("f-ordlabel", cat==="zones" ? "Week of the month" : "Which week");
   if(cat==="day"){ const due=$("f-due"); if(due&&!due.value) due.value=todayStr(); }
@@ -860,7 +869,7 @@ function renderCardBox(){
   const list=cards.filter(c=>c.category!=="todo"&&(currentCat==="all"||c.category===currentCat))
     .sort((a,b)=>(a.category||"").localeCompare(b.category||"")||(a.title||"").localeCompare(b.title||""));
   $("cardbox-list").innerHTML = list.length ? list.map(c=>
-    '<div class="card"><div class="row-between"><div>'+pillFor(c)+'<div style="font-weight:700;margin-top:.25rem">'+esc(c.title)+whoTag(c.who)+'</div>'
+    '<div class="card"><div class="row-between"><div>'+pillFor(c)+'<div style="font-weight:700;margin-top:.25rem">'+esc(c.title)+whoTag(effWho(c))+'</div>'
     +'<div class="meta">'+esc(cardMeta(c))+'</div>'
     +(c.notes?'<div class="progress-note">'+esc(c.notes)+'</div>':"")
     +(c.starter?'<div class="progress-note" style="font-style:italic">Starter card — make it yours or delete it.</div>':"")
@@ -869,12 +878,16 @@ function renderCardBox(){
 }
 window.editCard=id=>{
   const c=cards.find(x=>x.id===id)||{title:"",category:currentCat==="all"?"todo":currentCat,room:"",minutes:15,cadence:"once",notes:"",day:null,dueDate:"",monthWeek:null,active:true};
+  window._rotSel=(c.rotate||[]).slice(); window._rotCard=c.id?c:null;
   if(c.id&&c.category==="todo") return editTodo(id);
   openModal('<h2>'+(c.id?"Edit card":"New card")+'</h2>'
     +'<label>Title</label><input id="f-title" value="'+esc(c.title)+'" placeholder="e.g. Wipe the microwave">'
     +'<label>Divider (category)</label><select id="f-cat" onchange="catMode(this.value)">'+Object.keys(CATS).filter(k=>k!=="todo").map(k=>'<option value="'+k+'"'+(c.category===k?" selected":"")+'>'+CATS[k]+'</option>').join("")+'</select>'
     +(fam().length?'<label>Belongs to</label><select id="f-who">'+whoOptions(c.who)+'</select>':"")
     +'<label class="disp-member" style="margin-top:.35rem"><input type="checkbox" id="f-game"'+(c.game?" checked":"")+' style="width:22px;height:22px;flex:none"> 🎮 Surprise game after this card <span class="progress-note">— panel only; kids can\'t see this</span></label>'
+    +'<label class="disp-member" id="f-rotrow" style="margin-top:.35rem"><input type="checkbox" id="f-rotate"'+(c.rotate&&c.rotate.length?" checked":"")+' onchange="rotToggle()" style="width:22px;height:22px;flex:none"> 🔄 Rotating <span class="progress-note">— takes turns between people</span></label>'
+    +'<div id="f-rotlist" style="display:none;margin:.35rem 0 .1rem 1.9rem"></div>'
+    +'<div id="f-rotwho" class="progress-note" style="display:none;margin:.15rem 0 .1rem 1.9rem"></div>'
     +'<div class="row-between"><div style="flex:1"><label>Room / zone</label><input id="f-room" value="'+esc(c.room||"")+'" placeholder="Kitchen"></div>'
     +'<div style="width:110px"><label>Minutes</label><input id="f-min" type="number" min="0" value="'+(c.minutes||"")+'"></div></div>'
         +'<div id="f-dayrow"><label id="f-daylabel">Day of week</label><select id="f-day"><option value="">—</option>'+DAY_KEYS.map(k2=>'<option value="'+k2+'"'+(c.day===k2?" selected":"")+'>'+DAY_NAMES[k2]+'</option>').join("")+'</select></div>'
@@ -890,6 +903,7 @@ window.saveCardForm=async id=>{
   const _cat=$("f-cat").value, _todo=_cat==="todo";
   const title=$("f-title").value.trim();
   if(!title){ toast("Give the card a title first."); return; }
+  const _existing=id?cards.find(x=>x.id===id):null;
   let cadence, day=null, dueDate="", monthWeek=null;
   if(_todo){ cadence="once"; }
   else if(_cat==="basicweek"){ cadence="weekly"; day=$("f-day").value||null; }
@@ -899,13 +913,15 @@ window.saveCardForm=async id=>{
   else if(_cat==="anytime"){ cadence="never"; }
   else if(_cat==="day"){ cadence="once"; dueDate=$("f-due").value||""; if(!dueDate){ toast("Pick a date for this Day card."); return; } }
   else { cadence="weekly"; }
+  const _rotOn=!!($("f-rotate")&&$("f-rotate").checked)&&(_cat==="basicweek"||_cat==="monthly"||_cat==="zones");
+  if(_rotOn&&(window._rotSel||[]).length<2){ toast("Pick at least two people for the rotation."); return; }
   window._preset=null;
-  const card=Object.assign({refileUntil:null,doneEver:false},
+  const card=Object.assign({refileUntil:null,refileDone:null,doneEver:false},
     preset,
     { id:id||undefined,
     title:title, category:_cat, room:$("f-room").value.trim(),
     minutes:+$("f-min").value||0, cadence:cadence, day:day,
-    dueDate:dueDate, monthWeek:monthWeek, notes:$("f-notes").value.trim(), game:!!(($("f-game")&&$("f-game").checked)), who:_cat==="anytime"?null:(($("f-who")&&$("f-who").value)||null), active:true });
+    dueDate:dueDate, monthWeek:monthWeek, notes:$("f-notes").value.trim(), game:!!(($("f-game")&&$("f-game").checked)), who:_rotOn?null:(_cat==="anytime"?null:(($("f-who")&&$("f-who").value)||null)), rotate:_rotOn?(window._rotSel||[]).slice():null, rotateStart:_rotOn?((_existing&&_existing.rotateStart&&JSON.stringify(_existing.rotate||[])===JSON.stringify(window._rotSel||[]))?_existing.rotateStart:todayStr()):null, active:true });
   closeModal();
   await saveCard(card).catch(e=>toast("Couldn't save — check connection."));
   toast("Card filed. 🗂️");
@@ -1299,6 +1315,69 @@ async function sweepBoxClaims(){
   if(stale.length) render();
 }
 
+/* ---------------- ROTATION ---------------- */
+function periodIndex(c, ds){
+  const y=+ds.slice(0,4), mo=+ds.slice(5,7), da=+ds.slice(8,10);
+  if(c.cadence==="monthly" || c.category==="zones") return y*12+(mo-1);
+  const dn=Math.floor(Date.UTC(y,mo-1,da)/86400000);
+  if(c.cadence==="daily") return dn;
+  return Math.floor(dn/7);
+}
+function effWho(c, ds){
+  if(!c) return null;
+  if(c.rotate && c.rotate.length){
+    const famIds=fam().map(m=>m.id);
+    const list=c.rotate.filter(id=>famIds.indexOf(id)>=0);
+    if(!list.length) return null;
+    if(list.length===1) return list[0];
+    const t=ds||todayStr();
+    const start=c.rotateStart||t;
+    const p=periodIndex(c,t)-periodIndex(c,start);
+    return list[((p%list.length)+list.length)%list.length];
+  }
+  return c.who||null;
+}
+window.rotToggle=()=>{
+  const cb=$("f-rotate");
+  const row=$("f-rotrow");
+  const rowHidden=!!(row&&row.style.display==="none");
+  const on=!!(cb&&cb.checked)&&!rowHidden;
+  const list=$("f-rotlist");
+  if(list){ list.style.display=on?"":"none"; if(on) renderRotList(); }
+  const hint=$("f-rotwho");
+  if(hint){ hint.style.display=on?"":"none"; if(on) updateRotWho(); }
+  const who=$("f-who");
+  if(who){ const cat=($("f-cat")&&$("f-cat").value)||""; const hide=on||cat==="anytime"; who.style.display=hide?"none":""; const lb=who.previousElementSibling; if(lb&&lb.tagName==="LABEL") lb.style.display=hide?"none":""; }
+};
+function renderRotList(){
+  const list=$("f-rotlist"); if(!list) return;
+  const sel=window._rotSel||[];
+  list.innerHTML=fam().map(m=>{
+    const pos=sel.indexOf(m.id);
+    return '<label class="disp-member"><input type="checkbox" data-rotmem="'+m.id+'"'+(pos>=0?" checked":"")+' onchange="rotPick(this)" style="width:22px;height:22px;flex:none"> '+esc(m.name)+(pos>=0?' <span class="progress-note">· turn '+(pos+1)+'</span>':"")+'</label>';
+  }).join("");
+}
+window.rotPick=el=>{
+  const id=el.getAttribute("data-rotmem");
+  window._rotSel=window._rotSel||[];
+  if(el.checked){ if(window._rotSel.indexOf(id)<0) window._rotSel.push(id); }
+  else window._rotSel=window._rotSel.filter(x=>x!==id);
+  renderRotList(); updateRotWho();
+};
+function updateRotWho(){
+  const hint=$("f-rotwho"); if(!hint) return;
+  const sel=window._rotSel||[];
+  const names=sel.map(id=>{ const m=memberById(id); return m?m.name:"?"; });
+  const cat=($("f-cat")&&$("f-cat").value)||"";
+  const per=(cat==="monthly"||cat==="zones")?"month":"week";
+  if(sel.length<2){ hint.textContent="Tap two or more people, in turn order — the first person tapped takes the first turn."; return; }
+  let txt="Order: "+names.join(" → ")+" · one turn each "+per+".";
+  const rc=window._rotCard;
+  if(rc&&rc.rotate&&rc.rotate.length){ const cm=memberById(effWho(rc)); if(cm) txt+=" This "+per+": "+cm.name+"."; }
+  else txt+=" Starts with "+names[0]+" this "+per+".";
+  hint.textContent=txt;
+}
+
 function routineComplete(rid){ const r=routines[rid]; if(!r||!r.items||!r.items.length) return false; const checks=(((dayDoc&&dayDoc.routines)||{})[rid])||[]; return r.items.every(i=>checks.includes(i.id)); }
 
 /* ---------------- FAMILY DISPLAY MODE ---------------- */
@@ -1318,12 +1397,12 @@ function isDisplayMode(){
   }catch(e){ return false; }
 }
 function memberStars(mid){
-  let n=dayCards().filter(c=>c.who===mid&&isDoneToday(c)).length;
+  let n=dayCards().filter(c=>effWho(c)===mid&&isDoneToday(c)).length;
   Object.keys(routines).forEach(rid=>{ const r=routines[rid]; if(r&&r.who===mid&&routineDue(r)){ const ch=((dayDoc&&dayDoc.routines)||{})[rid]||[]; n+=ch.length; } });
   return n;
 }
 function memberRemaining(mid){
-  let n=dayCards().filter(c=>c.who===mid&&!isDoneToday(c)).length;
+  let n=dayCards().filter(c=>effWho(c)===mid&&!isDoneToday(c)).length;
   Object.keys(routines).forEach(rid=>{ const r=routines[rid]; if(r&&r.who===mid&&routineDue(r)){ const ch=((dayDoc&&dayDoc.routines)||{})[rid]||[]; n+=r.items.filter(it=>!ch.includes(it.id)).length; } });
   return n;
 }
@@ -1441,8 +1520,8 @@ function renderBoard(){
   el.style.gridTemplateColumns="repeat("+list.length+", minmax("+(disp?240:210)+"px, 1fr))";
   el.innerHTML=list.map(m=>{
     const mine=disp?(w=>w===m.id):(w=>!w||w===m.id);
-    const all=dayCards().filter(c=>mine(c.who));
-    const deck=onDeck().filter(c=>mine(c.who));
+    const all=dayCards().filter(c=>mine(effWho(c)));
+    const deck=onDeck().filter(c=>mine(effWho(c)));
     const done=all.filter(isDoneToday);
     const pct=all.length?Math.round(done.length/all.length*100):100;
     const rids=Object.keys(routines).sort((a,b)=>routineOrderPos(a)-routineOrderPos(b)).filter(rid=>mine(routines[rid].who)&&routineDue(routines[rid])&&(!disp||!routineComplete(rid)));
@@ -1462,7 +1541,7 @@ function renderWeek(){
     const dayCards=cards.filter(c=>c.active&&c.day===k&&c.category!=="monthly"&&c.category!=="zones"&&!isDoneToday(c));
     return '<div class="card weekday-card"><div class="row-between"><h3 style="margin:0">'+DAY_NAMES[k]+'</h3>'
       +'<button class="btn sage small" onclick="addCardForDay(\''+k+'\')">＋</button></div>'
-      +(dayCards.length? dayCards.map(c=>'<div class="taskrow"><div class="tt"><b>'+esc(c.title)+'</b>'+whoTag(c.who)+'<div class="progress-note">'+esc(cardMeta(c))+'</div></div>'
+      +(dayCards.length? dayCards.map(c=>'<div class="taskrow"><div class="tt"><b>'+esc(c.title)+'</b>'+whoTag(effWho(c))+'<div class="progress-note">'+esc(cardMeta(c))+'</div></div>'
         +'<button class="iconbtn" onclick="editCard(\''+c.id+'\')">✏️</button></div>').join("")
         :'<div class="empty">Nothing scheduled.</div>')+'</div>';
   }).join("");
@@ -1470,6 +1549,7 @@ function renderWeek(){
 window.addCardForDay=k=>openModalForNew({category:"basicweek",day:k,cadence:"weekly"});
 function openModalForNew(preset){
   window._preset=preset||{};
+  window._rotSel=[]; window._rotCard=null;
   const defCat=(typeof currentCat!=="undefined"&&currentCat&&currentCat!=="all"&&currentCat!=="todo")?currentCat:"basicweek";
   const c=Object.assign({title:"",category:defCat,room:"",minutes:15,cadence:"once",notes:"",day:null,dueDate:"",monthWeek:null,active:true},preset||{}); if(c.category==="day"&&!c.dueDate) c.dueDate=todayStr();
   openModal('<h2>New card</h2>'
@@ -1477,6 +1557,9 @@ function openModalForNew(preset){
     +'<label>Divider (category)</label><select id="f-cat" onchange="catMode(this.value)">'+Object.keys(CATS).filter(k2=>k2!=="todo").map(k2=>'<option value="'+k2+'"'+(c.category===k2?" selected":"")+'>'+CATS[k2]+'</option>').join("")+'</select>'
     +(fam().length?'<label>Belongs to</label><select id="f-who">'+whoOptions(c.who)+'</select>':"")
     +'<label class="disp-member" style="margin-top:.35rem"><input type="checkbox" id="f-game"'+(c.game?" checked":"")+' style="width:22px;height:22px;flex:none"> 🎮 Surprise game after this card <span class="progress-note">— panel only; kids can\'t see this</span></label>'
+    +'<label class="disp-member" id="f-rotrow" style="margin-top:.35rem"><input type="checkbox" id="f-rotate"'+(c.rotate&&c.rotate.length?" checked":"")+' onchange="rotToggle()" style="width:22px;height:22px;flex:none"> 🔄 Rotating <span class="progress-note">— takes turns between people</span></label>'
+    +'<div id="f-rotlist" style="display:none;margin:.35rem 0 .1rem 1.9rem"></div>'
+    +'<div id="f-rotwho" class="progress-note" style="display:none;margin:.15rem 0 .1rem 1.9rem"></div>'
     +'<div class="row-between"><div style="flex:1"><label>Room / zone</label><input id="f-room" value="'+esc(c.room||"")+'" placeholder="Kitchen"></div>'
     +'<div style="width:110px"><label>Minutes</label><input id="f-min" type="number" min="0" value="'+(c.minutes||"")+'"></div></div>'
         +'<div id="f-dayrow"><label id="f-daylabel">Day of week</label><select id="f-day"><option value="">—</option>'+DAY_KEYS.map(k2=>'<option value="'+k2+'"'+(c.day===k2?" selected":"")+'>'+DAY_NAMES[k2]+'</option>').join("")+'</select></div>'
@@ -1529,7 +1612,7 @@ async function renderHistory(){
   }).join("");
   body.innerHTML =
     '<p class="progress-note" style="margin:.35rem 0">'+(items.length? items.length+' card'+(items.length>1?"s":"")+' done · '+mins+' minutes' : 'Nothing checked off this day.')+(lost?' (+'+lost+' since removed)':"")+'</p>'
-    + items.map(c=>'<div class="taskrow"><span style="flex:none">✅</span><div class="tt"><b>'+esc(c.title)+'</b>'+whoTag(c.who)+'<div class="progress-note">'+esc(cardMeta(c))+'</div></div>'
+    + items.map(c=>'<div class="taskrow"><span style="flex:none">✅</span><div class="tt"><b>'+esc(c.title)+'</b>'+whoTag(effWho(c, ds))+'<div class="progress-note">'+esc(cardMeta(c))+'</div></div>'
       +(isToday?'<button class="btn ghost small" onclick="undoDone(\''+c.id+'\')">Undo</button>':"")
       +'</div>').join("")
     + rHtml;
@@ -1542,6 +1625,7 @@ window.undoDone=async id=>{
     await dayRef().set({done:{[id]:firebase.firestore.FieldValue.delete()}},{merge:true});
     const c=cards.find(c=>c.id===id);
     if(c&&c.cadence==="once") await col("cards").doc(id).set({doneEver:false},{merge:true});
+    if(c&&c.refileDone) await col("cards").doc(id).set({refileDone:null},{merge:true});
     toast("Put back on the list.");
   }catch(e){
     if(dayDoc&&dayDoc.done) dayDoc.done=Object.assign({},dayDoc.done,{[id]:true});
