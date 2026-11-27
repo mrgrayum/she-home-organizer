@@ -1414,8 +1414,11 @@ function dueOn(c, ds){
 function cardCreatedDs(c){
   try{
     if(!c || !c.createdAt) return null;
-    if(typeof c.createdAt.toDate==="function"){ const d=c.createdAt.toDate(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+    const fmt=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+    if(typeof c.createdAt.toDate==="function") return fmt(c.createdAt.toDate());
     if(typeof c.createdAt==="string") return c.createdAt.slice(0,10);
+    if(typeof c.createdAt==="number" && isFinite(c.createdAt)) return fmt(new Date(c.createdAt));
+    return todayStr(); /* unparseable (e.g. a just-saved server timestamp): treat as created today */
   }catch(e){}
   return null;
 }
