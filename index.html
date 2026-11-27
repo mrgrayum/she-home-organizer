@@ -90,6 +90,9 @@ label{font-size:.85rem; font-weight:600; color:var(--ink-soft); display:block; m
   padding:.35rem 0; display:flex; flex-direction:column; align-items:center; gap:2px;}
 .tabs button .ico{font-size:1.25rem;}
 .tabs button.active{background:var(--blush);color:var(--terra-dark);}
+.seg{display:flex; gap:.3rem; background:#fff; border:1px solid var(--line); border-radius:999px; padding:.25rem; margin:.2rem 0 .7rem;}
+.seg button{flex:1; border:none; background:none; border-radius:999px; padding:.5rem .4rem; font-weight:700; font-size:.9rem; color:var(--ink-soft);}
+.seg button.active{background:var(--blush); color:var(--terra-dark);}
 .view{display:none;} .view.active{display:block;}
 .taskrow{display:flex; align-items:center; gap:.7rem; padding:.65rem .2rem; border-bottom:1px dashed var(--line); -webkit-touch-callout:none; -webkit-user-select:none; user-select:none;}
 .taskrow .tt{cursor:pointer;} .card.focus h2{cursor:pointer;}
@@ -250,7 +253,8 @@ html,body{touch-action:manipulation}
 
     <!-- TODAY -->
     <section id="view-today" class="view active">
-            <div id="today-header">
+            <div class="seg"><button data-seg="today" class="active" onclick="goView('today')">☀️ Today</button><button data-seg="week" onclick="goView('week')">📅 Week</button></div>
+        <div id="today-header">
         <div class="th-row">
           <div><div class="th-kicker">Today</div><div id="th-sub" class="progress-note"></div></div>
           <div id="th-pct">0%</div>
@@ -274,6 +278,7 @@ html,body{touch-action:manipulation}
 
     <!-- CARD BOX -->
     <section id="view-cards" class="view">
+      <div class="seg"><button data-seg="cards" class="active" onclick="goView('cards')">🗂️ Cards</button><button data-seg="routines" onclick="goView('routines')">🔁 Routines</button></div>
       <div class="kicker">The card box</div>
       <p class="progress-note">Your digital 3×5 file. Everything lives on a card — browse by divider, tap to edit.</p>
       <div class="catbar" id="catbar"></div>
@@ -284,6 +289,7 @@ html,body{touch-action:manipulation}
 
     <!-- ROUTINES -->
     <section id="view-routines" class="view">
+      <div class="seg"><button data-seg="cards" onclick="goView('cards')">🗂️ Cards</button><button data-seg="routines" class="active" onclick="goView('routines')">🔁 Routines</button></div>
       <div class="row-between" style="align-items:center"><div class="kicker" style="margin:0">Routines</div><button class="btn ghost small" id="routine-order-toggle" onclick="toggleRoutineOrder()">⇅ Order</button></div>
       <p class="progress-note">Small, repeatable, done-before-you-think-about-it. They reset fresh every morning — yesterday is forgiven. Build and arrange them here — check them off from Today or the Board, where they show up collapsed.</p>
       <div id="routines-list"></div>
@@ -291,13 +297,15 @@ html,body{touch-action:manipulation}
 
     <!-- WEEK -->
     <section id="view-week" class="view">
-      <div class="kicker">The Basic Week</div>
+      <div class="seg"><button data-seg="today" onclick="goView('today')">☀️ Today</button><button data-seg="week" class="active" onclick="goView('week')">📅 Week</button></div>
+        <div class="kicker">The Basic Week</div>
       <p class="progress-note">One focus per day keeps the whole house covered without a single marathon cleaning day. Tap a day to see and edit its cards.</p>
       <div id="week-list"></div>
     </section>
 
     <!-- PROGRESS -->
     <section id="view-progress" class="view">
+      <button class="btn ghost small" onclick="goView('settings')" style="margin-bottom:.5rem">‹ Settings</button>
       <div class="kicker">Progress</div>
       <div class="card"><div class="row-between">
         <div><div class="streak" id="streak-num">0</div><div class="progress-note">day routine streak</div></div>
@@ -332,6 +340,12 @@ html,body{touch-action:manipulation}
     <!-- SETTINGS -->
     <section id="view-settings" class="view">
       <div class="kicker">Settings</div>
+      <div class="card" onclick="goView('progress')" style="cursor:pointer">
+        <div class="row-between" style="align-items:center">
+          <div><h3 style="margin:0">🌱 Progress &amp; history</h3><p class="progress-note" style="margin:.25rem 0 0">Streaks, what got done, and the week review.</p></div>
+          <span style="font-size:1.5rem;color:var(--ink-soft)">›</span>
+        </div>
+      </div>
       <div class="card">
         <h3>Need a hand?</h3>
         <p class="progress-note">A short, scrollable quick-start guide — how a day flows, the card box, routines, and keeping your data safe.</p>
@@ -387,9 +401,6 @@ html,body{touch-action:manipulation}
   <nav class="tabs" id="tabs">
     <button data-view="today" class="active"><span class="ico">☀️</span>Today</button><button data-view="board"><span class="ico">📋</span>Board</button>
     <button data-view="cards"><span class="ico">🗂️</span>Cards</button>
-    <button data-view="routines"><span class="ico">🔁</span>Routines</button>
-    <button data-view="week"><span class="ico">📅</span>Week</button>
-    <button data-view="progress"><span class="ico">🌱</span>Progress</button>
     <button data-view="settings"><span class="ico">⚙️</span>Settings</button>
   </nav>
 </div>
@@ -1958,7 +1969,9 @@ window.pinRemoveGo=async()=>{
 /* ---------------- nav + boot ---------------- */
 window.goView=name=>{
   if(document.body.classList.contains("display-mode") && name!=="board") return;
-  document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("active",b.dataset.view===name));
+  const tab={week:"today",routines:"cards",progress:"settings"}[name]||name;
+  document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("active",b.dataset.view===tab));
+  document.querySelectorAll("[data-seg]").forEach(b=>b.classList.toggle("active",b.dataset.seg===name));
   document.querySelectorAll(".view").forEach(v=>v.classList.toggle("active",v.id==="view-"+name));
   if(name==="progress") renderProgress();
   document.querySelector(".wrap").classList.toggle("wide",name==="board");
