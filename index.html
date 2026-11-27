@@ -300,6 +300,7 @@ html,body{touch-action:manipulation}
       <div class="seg"><button data-seg="today" onclick="goView('today')">☀️ Today</button><button data-seg="week" class="active" onclick="goView('week')">📅 Week</button></div>
         <div class="kicker">The Basic Week</div>
       <p class="progress-note">One focus per day keeps the whole house covered without a single marathon cleaning day. Tap a day to see and edit its cards.</p>
+      <div id="week-who-chips" style="display:none;gap:.4rem;overflow-x:auto;padding:.1rem 0 .45rem;"></div>
       <div id="week-list"></div>
     </section>
 
@@ -652,7 +653,8 @@ window.toggleWho=id=>{
   render();
 };
 function renderWhoChips(){
-  const el=$("who-chips"); if(!el) return;
+  ["who-chips","week-who-chips"].forEach(cid=>{
+  const el=$(cid); if(!el) return;
   const list=fam();
   if(!list.length){ el.innerHTML=""; el.style.display="none"; return; }
   el.style.display="flex";
@@ -662,6 +664,7 @@ function renderWhoChips(){
       const on=allOn||selWho.includes(m.id);
       return '<button class="who-chip'+(on?" on":"")+'" onclick="toggleWho(\''+m.id+'\')"><span style="width:8px;height:8px;border-radius:99px;background:'+m.color+';display:inline-block;flex:none"></span>'+esc(m.name)+'</button>';
     }).join("");
+  });
 }
 const FAM_COLORS=["#c96f4a","#6a994e","#4d96a9","#9b5de5","#d68c45","#5e60ce","#ef476f","#778da9"];
 function fam(){ return (settingsDoc&&settingsDoc.family)||[]; }
@@ -1658,7 +1661,7 @@ function renderBoard(){
 window.addTodoFor=id=>{ window._todoWho=id; addTodo(); window._todoWho=null; };
 function renderWeek(){
   $("week-list").innerHTML=DAY_KEYS.map(k=>{
-    const dayCards=cards.filter(c=>c.active&&c.day===k&&c.category!=="monthly"&&c.category!=="zones"&&!isDoneToday(c));
+    const dayCards=cards.filter(c=>c.active&&c.day===k&&c.category!=="monthly"&&c.category!=="zones"&&!isDoneToday(c)&&whoVisible(effWho(c)));
     return '<div class="card weekday-card"><div class="row-between"><h3 style="margin:0">'+DAY_NAMES[k]+'</h3>'
       +'<button class="btn sage small" onclick="addCardForDay(\''+k+'\')">＋</button></div>'
       +(dayCards.length? dayCards.map(c=>'<div class="taskrow"><div class="tt"><b>'+esc(c.title)+'</b>'+whoTag(effWho(c))+'<div class="progress-note">'+esc(cardMeta(c))+'</div></div>'
