@@ -818,9 +818,10 @@ window.editTodo=id=>{
     +(fam().length?'<label>Belongs to</label><select id="f-ewho">'+whoOptions(c.who)+'</select>':"")
     +'<label class="disp-member" style="margin-top:.35rem"><input type="checkbox" id="f-game"'+(c.game?" checked":"")+' style="width:22px;height:22px;flex:none"> 🎮 Surprise game after this to-do <span class="progress-note">— panel only; kids can\'t see this</span></label>'
     +'<label>Notes</label><textarea id="f-notes" rows="2">'+esc(c.notes||"")+'</textarea>'
-    +'<div class="btnrow"><button class="btn" onclick="saveTodoEdit(\''+id+'\')">Save</button><button class="btn secondary" onclick="doRefile(\''+id+'\')">"+(c.fromBox?"Back to box…":"Park…")+"</button>'
+    +'<div class="btnrow"><button class="btn" onclick="saveTodoEdit(\''+id+'\')">Save</button><button class="btn secondary" id="f-parkbtn" onclick="doRefile(\''+id+'\')">Park…</button>'
     +'<button class="btn ghost" onclick="delCard(\''+id+'\')">Delete</button>'
     +'<button class="btn ghost" onclick="closeModal()">Cancel</button></div>');
+  if(c.fromBox){ const pb=$("f-parkbtn"); if(pb) pb.textContent="Back to box…"; }
 };
 window.saveTodoEdit=async id=>{
   const t=$("f-title").value.trim(); if(!t){ toast("Give it a title first."); return; }
