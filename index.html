@@ -1493,7 +1493,8 @@ function isDisplayMode(){
   try{
     if(sessionStorage.getItem("sheDisplayExit")) return false;
     if(new URLSearchParams(location.search).get("display")==="1") return true;
-    return localStorage.getItem("sheDisplay")==="1";
+    if(localStorage.getItem("sheDisplay")==="1") return true;
+    return sessionStorage.getItem("sheDisplayPreview")==="1";
   }catch(e){ return false; }
 }
 function memberStars(mid){
@@ -1579,12 +1580,17 @@ function renderDisplayArea(){
   const sel=cfg&&Array.isArray(cfg.members)?cfg.members:list.map(m=>m.id);
   const snd=displaySound();
   let exited=false; try{ exited=!!sessionStorage.getItem("sheDisplayExit"); }catch(e){}
+  let latched=false; try{ latched=localStorage.getItem("sheDisplay")==="1"; }catch(e){}
   el.innerHTML='<p class="progress-note" style="margin-top:0">The wall panel shows only the Board, only for the people checked here \u2014 and only their own cards and routines. Changes reach the panel on their own.</p>'
     +list.map(m=>'<label class="disp-member"><input type="checkbox" data-disp-member="'+m.id+'"'+(sel.includes(m.id)?" checked":"")+' onchange="saveDisplaySettings()"><span style="width:12px;height:12px;border-radius:99px;background:'+m.color+';display:inline-block;flex:none"></span>'+esc(m.name)+'</label>').join("")
     +'<label>Celebration sound</label><select id="disp-sound" onchange="saveDisplaySettings()"><option value="off"'+(snd==="off"?" selected":"")+'>Off</option><option value="chime"'+(snd==="chime"?" selected":"")+'>Chime</option><option value="coin"'+(snd==="coin"?" selected":"")+'>Coin (cha-ching)</option></select>'
     +'<label class="disp-member"><input type="checkbox" id="disp-games"'+(gamesEnabled()?" checked":"")+' onchange="saveDisplaySettings()"> 🎮 Reward games on the panel</label>'
     +'<p class="progress-note">Finishing everything in a column earns a game. You can also hide a surprise game behind any one card — set it in that card\'s edit form; the kids can\'t see which cards have one.</p>'
-    +'<div class="btnrow">'+(exited?'<button class="btn sage small" onclick="displayGo()">Back to display mode</button>':'<button class="btn secondary small" onclick="displayGo()">Preview display mode on this device</button>')+'</div>'
+    +'<div class="btnrow">'
+    +(exited?'<button class="btn sage small" onclick="displayBack()">Back to display mode</button>':"")
+    +(latched?'<button class="btn secondary small" onclick="displayOff()">Use the normal app on this device</button>':'<button class="btn secondary small" onclick="displayPreview()">Preview display mode on this device</button><button class="btn ghost small" onclick="displayGo()">Always open this device as the panel</button>')
+    +'</div>'
+    +(latched?'<p class="progress-note">This device is set to open as the family panel every time. (The wall panel has its own address and is not affected.)</p>':'<p class="progress-note">Preview lasts until the app is closed.</p>')
     +'<p class="progress-note">On the panel, tap the \u2699\uFE0F in the corner and enter the parental PIN to reach the full app. The panel returns to the display on its own at the next reload.</p>';
 }
 window.saveDisplaySettings=()=>{ if(!writeGate()) return;
@@ -1593,7 +1599,10 @@ window.saveDisplaySettings=()=>{ if(!writeGate()) return;
   const gEl=$("disp-games"); const games=gEl?!!gEl.checked:true;
   col("settings").doc("main").set({display:{members:members,sound:sound,games:games}},{merge:true}).then(()=>toast("Display settings saved. \uD83D\uDCFA")).catch(e=>toast("Couldn't save \u2014 check connection."));
 };
-window.displayGo=()=>{ try{ localStorage.setItem("sheDisplay","1"); sessionStorage.removeItem("sheDisplayExit"); }catch(e){} location.reload(); };
+window.displayGo=()=>{ try{ localStorage.setItem("sheDisplay","1"); sessionStorage.removeItem("sheDisplayExit"); sessionStorage.removeItem("sheDisplayPreview"); }catch(e){} location.reload(); };
+window.displayPreview=()=>{ try{ sessionStorage.setItem("sheDisplayPreview","1"); sessionStorage.removeItem("sheDisplayExit"); }catch(e){} location.reload(); };
+window.displayBack=()=>{ try{ sessionStorage.removeItem("sheDisplayExit"); }catch(e){} location.reload(); };
+window.displayOff=()=>{ try{ localStorage.removeItem("sheDisplay"); sessionStorage.removeItem("sheDisplayPreview"); sessionStorage.removeItem("sheDisplayExit"); }catch(e){} location.reload(); };
 window.displayExit=async()=>{ if(!(await pinGate("leave the family display"))) return; try{ sessionStorage.setItem("sheDisplayExit","1"); }catch(e){} location.reload(); };
 /* Warm pastel tint from a member's color: blend toward the cream paper. */
 function tintOf(hex){ const m=/^#?([0-9a-f]{6})$/i.exec(hex||""); if(!m) return "#f3e9d7"; const n=parseInt(m[1],16); const mix=(c,t)=>Math.round(c+(t-c)*0.80); return "rgb("+mix(n>>16,250)+","+mix((n>>8)&255,245)+","+mix(n&255,236)+")"; }
