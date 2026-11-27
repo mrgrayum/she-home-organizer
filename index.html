@@ -204,6 +204,9 @@ body.display-mode .broutine{background:rgba(255,253,247,.75);border:1px solid rg
 .sh-ball{position:absolute; bottom:30px; width:26%; text-align:center; font-size:2.1rem; z-index:1; transition:left .38s ease;}
 /* No double-tap zoom delay/gesture at the root; scrolling still pans. */
 html,body{touch-action:manipulation}
+.box-chips{display:flex; gap:.4rem; flex-wrap:wrap; margin:.5rem 0 .6rem;}
+.box-chip{border:1px solid #d8cbb6; background:#fffdf8; border-radius:999px; padding:.45rem .85rem; font-weight:600; cursor:pointer; color:#503a26;}
+.box-chip.active{background:var(--terra,#c96f4a); color:#fff; border-color:var(--terra,#c96f4a);}
 </style>
 </head>
 <body>
@@ -409,7 +412,7 @@ const FIREBASE_READY = FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey.indexOf(
 const $ = id => document.getElementById(id);
 const DAY_KEYS = ["sun","mon","tue","wed","thu","fri","sat"];
 const DAY_NAMES = {sun:"Sunday",mon:"Monday",tue:"Tuesday",wed:"Wednesday",thu:"Thursday",fri:"Friday",sat:"Saturday"};
-const CATS = {basicweek:"Basic Week", day:"Day", monthly:"Monthly", zones:"Zones", menus:"Menus", todo:"To Do"};
+const CATS = {basicweek:"Basic Week", day:"Day", monthly:"Monthly", zones:"Zones", menus:"Menus", anytime:"Anytime", todo:"To Do"};
 function todayStr(d){ d=d||new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 function addDaysStr(base,n){ const d=new Date(base+"T12:00:00"); d.setDate(d.getDate()+n); return todayStr(d); }
 function fmtDay(ds){ try{ return new Date(ds+"T12:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"}); }catch(e){ return ds; } }
@@ -516,7 +519,7 @@ const dayRef = () => col("days").doc(todayStr());
 
 function listenAll(){
   unsubs.forEach(u=>u()); unsubs=[];
-  unsubs.push(col("cards").onSnapshot(s=>{ cards=s.docs.map(d=>Object.assign({id:d.id},d.data())); noteSync("cards"); render(); }));
+  unsubs.push(col("cards").onSnapshot(s=>{ cards=s.docs.map(d=>Object.assign({id:d.id},d.data())); noteSync("cards"); render(); maybeSweepBox(); }));
   unsubs.push(col("routines").onSnapshot(s=>{ routines={}; s.docs.forEach(d=>routines[d.id]=Object.assign({id:d.id},d.data())); noteSync("routines"); render(); }));
   unsubs.push(dayRef().onSnapshot(s=>{ dayDoc=s.exists?Object.assign({id:s.id},s.data()):{id:todayStr(),done:{},refiles:{},routines:{}}; noteSync("day"); render(); }));
   unsubs.push(col("settings").doc("main").onSnapshot(s=>{ settingsDoc=s.exists?s.data():null; noteSync("settings"); render(); }));
@@ -673,7 +676,8 @@ function dayCards(){
   const t=todayStr(), wd=DAY_KEYS[new Date().getDay()], dom=new Date().getDate();
   return cards.filter(c=>{
     if(!c.active || c.category==="routine") return false;
-    if(c.category==="todo"){ if(c.refileUntil && c.refileUntil>t) return false; return !c.doneEver || isDoneToday(c); }
+    if(c.category==="anytime") return false;
+    if(c.category==="todo"){ if(c.fromBox && c.claimDate!==t) return false; if(c.refileUntil && c.refileUntil>t) return false; return !c.doneEver || isDoneToday(c); }
     if(c.refileUntil && c.refileUntil>t) return false;
     if(c.refileUntil && c.refileUntil<=t) return !c.doneEver || isDoneToday(c);
     if(c.cadence==="daily") return true;
@@ -694,6 +698,7 @@ function cardMeta(c, noMin){
   if(c.category==="day" && c.dueDate) bits.push(fmtDay(c.dueDate));
   else if(c.category==="monthly" && c.day && c.monthWeek) bits.push(["","1st","2nd","3rd","4th","5th / last"][+c.monthWeek]+" "+DAY_NAMES[c.day]);
   else if(c.category==="zones" && c.monthWeek) bits.push("Week "+(+c.monthWeek)+" of the month");
+  else if(c.category==="anytime") bits.push("In the box");
   else if(c.cadence==="once") bits.push("One-time");
   else if(c.cadence) bits.push(c.cadence[0].toUpperCase()+c.cadence.slice(1));
   if(c.minutes && !noMin) bits.push(c.minutes+" min");
@@ -779,6 +784,7 @@ window.moveCard=(id,dir)=>{ if(!writeGate()) return;
 window.doDone=id=>markDone(id).then(render).catch(e=>toast("Couldn't save — check connection."));
 window.doRefile=id=>{
   const rc=cards.find(x=>x.id===id),isTodo=rc&&rc.category==="todo",t0=todayStr(),d1=addDaysStr(t0,1),d3=addDaysStr(t0,3),d7=addDaysStr(t0,7);
+  if(rc&&rc.fromBox){ openModal('<h2>Put this back in the box?</h2><p class="progress-note">It leaves today\'s list and returns to the Anytime box, ready to be claimed another day.</p><div class="btnrow"><button class="btn" onclick="putBackBox(\''+id+'\')">Put back in the box</button><button class="btn ghost" onclick="closeModal()">Keep it here</button></div>'); return; }
   openModal('<h2>'+(isTodo?"Park this to-do":"Refile this card")+'</h2><p class="progress-note">'+(isTodo?"Off today's list, not out of your life \u2014 it pops back up on its own.":"No guilt \u2014 filing it away is the system working as designed.")+'</p>'
     +'<div class="btnrow" style="flex-direction:column">'
     +'<button class="btn" onclick="doRefileGo(\''+id+'\',\'tomorrow\')">Until tomorrow ('+fmtDay(d1)+')</button>'
@@ -812,7 +818,7 @@ window.editTodo=id=>{
     +(fam().length?'<label>Belongs to</label><select id="f-ewho">'+whoOptions(c.who)+'</select>':"")
     +'<label class="disp-member" style="margin-top:.35rem"><input type="checkbox" id="f-game"'+(c.game?" checked":"")+' style="width:22px;height:22px;flex:none"> 🎮 Surprise game after this to-do <span class="progress-note">— panel only; kids can\'t see this</span></label>'
     +'<label>Notes</label><textarea id="f-notes" rows="2">'+esc(c.notes||"")+'</textarea>'
-    +'<div class="btnrow"><button class="btn" onclick="saveTodoEdit(\''+id+'\')">Save</button><button class="btn secondary" onclick="doRefile(\''+id+'\')">Park…</button>'
+    +'<div class="btnrow"><button class="btn" onclick="saveTodoEdit(\''+id+'\')">Save</button><button class="btn secondary" onclick="doRefile(\''+id+'\')">"+(c.fromBox?"Back to box…":"Park…")+"</button>'
     +'<button class="btn ghost" onclick="delCard(\''+id+'\')">Delete</button>'
     +'<button class="btn ghost" onclick="closeModal()">Cancel</button></div>');
 };
@@ -828,6 +834,7 @@ window.catMode=cat=>{
   show("f-dayrow", cat==="basicweek"||cat==="monthly");
   show("f-ordrow", cat==="monthly"||cat==="zones");
   show("f-duerow", cat==="day");
+  const whoEl=$("f-who"); if(whoEl){ const hideWho=cat==="anytime"; whoEl.style.display=hideWho?"none":""; const lb=whoEl.previousElementSibling; if(lb&&lb.tagName==="LABEL") lb.style.display=hideWho?"none":""; }
   lbl("f-daylabel","Day of week");
   lbl("f-ordlabel", cat==="zones" ? "Week of the month" : "Which week");
   if(cat==="day"){ const due=$("f-due"); if(due&&!due.value) due.value=todayStr(); }
@@ -888,6 +895,7 @@ window.saveCardForm=async id=>{
   else if(_cat==="monthly"){ cadence="monthly"; day=$("f-day").value||null; monthWeek=day?((+$("f-ord").value)||1):null; }
   else if(_cat==="zones"){ cadence="monthly"; monthWeek=$("f-ord").value?(+$("f-ord").value):null; }
   else if(_cat==="menus"){ cadence="weekly"; }
+  else if(_cat==="anytime"){ cadence="never"; }
   else if(_cat==="day"){ cadence="once"; dueDate=$("f-due").value||""; if(!dueDate){ toast("Pick a date for this Day card."); return; } }
   else { cadence="weekly"; }
   window._preset=null;
@@ -896,7 +904,7 @@ window.saveCardForm=async id=>{
     { id:id||undefined,
     title:title, category:_cat, room:$("f-room").value.trim(),
     minutes:+$("f-min").value||0, cadence:cadence, day:day,
-    dueDate:dueDate, monthWeek:monthWeek, notes:$("f-notes").value.trim(), game:!!(($("f-game")&&$("f-game").checked)), who:(($("f-who")&&$("f-who").value)||null), active:true });
+    dueDate:dueDate, monthWeek:monthWeek, notes:$("f-notes").value.trim(), game:!!(($("f-game")&&$("f-game").checked)), who:_cat==="anytime"?null:(($("f-who")&&$("f-who").value)||null), active:true });
   closeModal();
   await saveCard(card).catch(e=>toast("Couldn't save — check connection."));
   toast("Card filed. 🗂️");
@@ -1220,6 +1228,76 @@ function gameShell(host,api){
 }
 const GAMES=[{id:"breakout",title:"🧱 Breakout",start:gameBreakout},{id:"startap",title:"⭐ Star Tap",start:gameStarTap},{id:"hangman",title:"🔤 Hangman",start:gameHangman},{id:"memory",title:"🧠 Memory Match",start:gameMemory},{id:"shell",title:"👀 Shell Game",start:gameShell}];
 
+/* ---------------- ANYTIME BOX ---------------- */
+function boxCatalog(){ return cards.filter(c=>c.category==="anytime"&&c.active!==false); }
+function boxTasks(){
+  const q=(window._boxQ||"").toLowerCase();
+  return boxCatalog()
+    .filter(c=>!window._boxMax||(c.minutes||0)<=window._boxMax)
+    .filter(c=>!q||(c.title||"").toLowerCase().indexOf(q)>=0||(c.room||"").toLowerCase().indexOf(q)>=0)
+    .sort((a,b)=>((a.minutes||0)-(b.minutes||0))||(a.title||"").localeCompare(b.title||""));
+}
+function boxPickerHtml(){
+  const m=memberById(window._boxFor);
+  return '<h2>⏱ A few minutes'+(m?', '+esc(m.name):"")+'?</h2>'
+    +'<p class="progress-note">Pick a task from the box. It lands in '+(m?esc(m.name)+"’s":"the")+' column for today — finish it today, or it goes back in the box tomorrow.</p>'
+    +'<div class="box-chips">'+[[0,"Any length"],[10,"≤ 10 min"],[15,"≤ 15 min"],[30,"≤ 30 min"],[60,"≤ 60 min"]].map(function(pair){ return '<button class="box-chip'+(window._boxMax===pair[0]?" active":"")+'" onclick="boxSetMax('+pair[0]+')">'+pair[1]+'</button>'; }).join("")+'</div>'
+    +'<input id="box-q" placeholder="Search the box…" value="'+esc(window._boxQ||"")+'" oninput="boxSetQ(this.value)">'
+    +'<div id="box-list" style="margin-top:.6rem"></div>'
+    +'<div class="btnrow"><button class="btn ghost" onclick="closeModal()">Close</button></div>';
+}
+function renderBoxList(){
+  const el=$("box-list"); if(!el) return;
+  const list=boxTasks();
+  el.innerHTML=list.length?list.map(c=>'<div class="taskrow"><div class="tt"><b>'+esc(c.title)+'</b><div class="progress-note">'+esc(cardMeta(c))+'</div></div><button class="btn sage small" onclick="claimBox(\''+c.id+'\')">Add to today</button></div>').join("")
+    :'<div class="empty">'+(boxCatalog().length?'Nothing in the box fits — try a longer time or clear the search.':'The box is empty. Stock it from the Cards tab → Anytime.')+'</div>';
+}
+window.openBox=mid=>{ window._boxFor=mid; if(window._boxMax===undefined){ window._boxMax=0; window._boxQ=""; } maybeSweepBox(); openModal(boxPickerHtml()); renderBoxList(); };
+window.boxSetMax=v=>{ window._boxMax=v; openModal(boxPickerHtml()); renderBoxList(); };
+window.boxSetQ=v=>{ window._boxQ=v; renderBoxList(); };
+window.claimBox=async id=>{
+  if(!writeGate()) return;
+  const c=cards.find(x=>x.id===id); if(!c) return;
+  const mid=window._boxFor, m=memberById(mid);
+  try{ await saveCard({title:c.title,category:"todo",room:c.room||"",minutes:c.minutes||0,cadence:"once",day:null,dueDate:"",monthWeek:null,notes:c.notes||"",game:!!c.game,who:mid||null,refileUntil:null,doneEver:false,active:true,fromBox:true,claimDate:todayStr()}); }
+  catch(e){ toast("Couldn't save — check connection."); return; }
+  closeModal();
+  await col("cards").doc(id).delete().catch(()=>{});
+  toast("Added to "+(m?m.name:"the")+" list for today. ⏱");
+  render();
+};
+window.putBackBox=async id=>{
+  if(!writeGate()) return;
+  const c=cards.find(x=>x.id===id); if(!c) return;
+  try{ await saveCard({title:c.title,category:"anytime",room:c.room||"",minutes:c.minutes||0,cadence:"never",day:null,dueDate:"",monthWeek:null,notes:c.notes||"",game:!!c.game,who:null,active:true}); }
+  catch(e){ toast("Couldn't save — check connection."); return; }
+  closeModal();
+  await col("cards").doc(id).delete().catch(()=>{});
+  toast("Back in the box. 📦");
+  render();
+};
+let _boxSweepRunning=false;
+function maybeSweepBox(){
+  if(_boxSweepRunning||!syncReady) return;
+  const t=todayStr();
+  if(!cards.some(c=>c.fromBox&&c.claimDate&&c.claimDate<t)) return;
+  _boxSweepRunning=true;
+  sweepBoxClaims().catch(()=>{}).finally(()=>{ _boxSweepRunning=false; });
+}
+async function sweepBoxClaims(){
+  const t=todayStr();
+  const stale=cards.filter(c=>c.fromBox&&c.claimDate&&c.claimDate<t);
+  for(const c of stale){
+    const dd=await histDayDoc(c.claimDate).catch(()=>null);
+    const wasDone=!!(dd&&dd.done&&dd.done[c.id]);
+    if(!wasDone){
+      await saveCard({title:c.title,category:"anytime",room:c.room||"",minutes:c.minutes||0,cadence:"never",day:null,dueDate:"",monthWeek:null,notes:c.notes||"",game:!!c.game,who:null,active:true});
+    }
+    await col("cards").doc(c.id).delete().catch(()=>{});
+  }
+  if(stale.length) render();
+}
+
 function routineComplete(rid){ const r=routines[rid]; if(!r||!r.items||!r.items.length) return false; const checks=(((dayDoc&&dayDoc.routines)||{})[rid])||[]; return r.items.every(i=>checks.includes(i.id)); }
 
 /* ---------------- FAMILY DISPLAY MODE ---------------- */
@@ -1372,7 +1450,7 @@ function renderBoard(){
     const headHtml=disp?'<span class="davatar" style="background:'+m.color+'">'+esc((m.name||"?").trim().charAt(0).toUpperCase())+'</span>':'<span style="width:10px;height:10px;border-radius:99px;background:'+m.color+';display:inline-block;flex:none"></span>';
     return '<div class="bcol"'+(disp?' data-col-for="'+m.id+'" style="background:'+tintOf(m.color)+'"':"")+'><div class="bcol-head">'+headHtml+'<b>'+esc(m.name)+'</b><span class="progress-note">'+done.length+'/'+all.length+' \u00B7 '+pct+'%</span>'+(disp?'<span class="dstars" data-stars-for="'+m.id+'">\u2B50 '+memberStars(m.id)+'</span>':"")+'</div>'
       +'<div class="bcol-bar"><div style="width:'+pct+'%"></div></div>'
-      +(disp?'<div class="bcol-scroll">'+rowsHtml+routHtml+'</div>':rowsHtml+routHtml+'<button class="btn sage small" style="margin-top:.55rem;width:100%" onclick="addTodoFor(\''+m.id+'\')">\uFF0B To-do</button>')
+      +(disp?'<div class="bcol-scroll">'+rowsHtml+routHtml+'</div>':rowsHtml+routHtml+'<button class="btn sage small" style="margin-top:.55rem;width:100%" onclick="addTodoFor(\''+m.id+'\')">\uFF0B To-do</button>'+'<button class="btn secondary small" style="margin-top:.4rem;width:100%" onclick="openBox(\''+m.id+'\')">⏱ I have a few minutes…</button>')
       +'</div>';
   }).join("");
   if(disp){ const gm=(window._pendingGame&&window._pendingGame.mid)||(window._pendingCeleb&&window._pendingCeleb.mid); consumeCeleb(); processGameTriggers(gm); }
