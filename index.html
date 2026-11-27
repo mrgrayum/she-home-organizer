@@ -436,7 +436,7 @@ const FIREBASE_READY = FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey.indexOf(
 const $ = id => document.getElementById(id);
 const DAY_KEYS = ["sun","mon","tue","wed","thu","fri","sat"];
 const DAY_NAMES = {sun:"Sunday",mon:"Monday",tue:"Tuesday",wed:"Wednesday",thu:"Thursday",fri:"Friday",sat:"Saturday"};
-const CATS = {basicweek:"Basic Week", day:"Day", monthly:"Monthly", zones:"Zones", menus:"Menus", anytime:"Anytime", todo:"To Do"};
+const CATS = {basicweek:"Basic Week", daily:"Daily", day:"Day", monthly:"Monthly", zones:"Zones", menus:"Menus", anytime:"Anytime", todo:"To Do"};
 function todayStr(d){ d=d||new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 function addDaysStr(base,n){ const d=new Date(base+"T12:00:00"); d.setDate(d.getDate()+n); return todayStr(d); }
 function fmtDay(ds){ try{ return new Date(ds+"T12:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"}); }catch(e){ return ds; } }
@@ -730,6 +730,7 @@ function cardMeta(c, noMin){
   else if(c.category==="monthly" && c.day && c.monthWeek) bits.push(["","1st","2nd","3rd","4th","5th / last"][+c.monthWeek]+" "+DAY_NAMES[c.day]);
   else if(c.category==="zones" && c.monthWeek) bits.push("Week "+(+c.monthWeek)+" of the month");
   else if(c.category==="anytime") bits.push("In the box");
+  else if(c.category==="daily") bits.push("Every day");
   else if(c.cadence==="once") bits.push("One-time");
   else if(c.cadence) bits.push(c.cadence[0].toUpperCase()+c.cadence.slice(1));
   if(c.minutes && !noMin) bits.push(c.minutes+" min");
@@ -868,8 +869,8 @@ window.catMode=cat=>{
   show("f-ordrow", cat==="monthly"||cat==="zones");
   show("f-duerow", cat==="day");
   const whoEl=$("f-who"); if(whoEl){ const hideWho=cat==="anytime"; whoEl.style.display=hideWho?"none":""; const lb=whoEl.previousElementSibling; if(lb&&lb.tagName==="LABEL") lb.style.display=hideWho?"none":""; }
-  show("f-rotrow", cat==="basicweek"||cat==="monthly"||cat==="zones");
-  if(!(cat==="basicweek"||cat==="monthly"||cat==="zones")){ const rl=$("f-rotlist"); if(rl) rl.style.display="none"; const rw=$("f-rotwho"); if(rw) rw.style.display="none"; }
+  show("f-rotrow", cat==="basicweek"||cat==="monthly"||cat==="zones"||cat==="daily");
+  if(!(cat==="basicweek"||cat==="monthly"||cat==="zones"||cat==="daily")){ const rl=$("f-rotlist"); if(rl) rl.style.display="none"; const rw=$("f-rotwho"); if(rw) rw.style.display="none"; }
   if($("f-rotate")) rotToggle();
   lbl("f-daylabel","Day of week");
   lbl("f-ordlabel", cat==="zones" ? "Week of the month" : "Which week");
@@ -936,10 +937,11 @@ window.saveCardForm=async id=>{
   else if(_cat==="monthly"){ cadence="monthly"; day=$("f-day").value||null; monthWeek=day?((+$("f-ord").value)||1):null; }
   else if(_cat==="zones"){ cadence="monthly"; monthWeek=$("f-ord").value?(+$("f-ord").value):null; }
   else if(_cat==="menus"){ cadence="weekly"; }
+  else if(_cat==="daily"){ cadence="daily"; }
   else if(_cat==="anytime"){ cadence="never"; }
   else if(_cat==="day"){ cadence="once"; dueDate=$("f-due").value||""; if(!dueDate){ toast("Pick a date for this Day card."); return; } }
   else { cadence="weekly"; }
-  const _rotOn=!!($("f-rotate")&&$("f-rotate").checked)&&(_cat==="basicweek"||_cat==="monthly"||_cat==="zones");
+  const _rotOn=!!($("f-rotate")&&$("f-rotate").checked)&&(_cat==="basicweek"||_cat==="monthly"||_cat==="zones"||_cat==="daily");
   if(_rotOn&&(window._rotSel||[]).length<2){ toast("Pick at least two people for the rotation."); return; }
   window._preset=null;
   const card=Object.assign({refileUntil:null,refileDone:null,doneEver:false},
@@ -1395,7 +1397,7 @@ function updateRotWho(){
   const sel=window._rotSel||[];
   const names=sel.map(id=>{ const m=memberById(id); return m?m.name:"?"; });
   const cat=($("f-cat")&&$("f-cat").value)||"";
-  const per=(cat==="monthly"||cat==="zones")?"month":"week";
+  const per=(cat==="monthly"||cat==="zones")?"month":(cat==="daily"?"day":"week");
   if(sel.length<2){ hint.textContent="Tap two or more people, in turn order — the first person tapped takes the first turn."; return; }
   let txt="Order: "+names.join(" → ")+" · one turn each "+per+".";
   const rc=window._rotCard;
@@ -1660,11 +1662,13 @@ function renderBoard(){
 }
 window.addTodoFor=id=>{ window._todoWho=id; addTodo(); window._todoWho=null; };
 function renderWeek(){
+  const wkStart=weekStartDs(todayStr());
   $("week-list").innerHTML=DAY_KEYS.map(k=>{
-    const dayCards=cards.filter(c=>c.active&&c.day===k&&c.category!=="monthly"&&c.category!=="zones"&&!isDoneToday(c)&&whoVisible(effWho(c)));
+    const dsK=addDaysStr(wkStart, DAY_KEYS.indexOf(k));
+    const dayCards=cards.filter(c=>c.active&&(c.day===k||c.cadence==="daily")&&c.category!=="monthly"&&c.category!=="zones"&&!isDoneToday(c)&&whoVisible(effWho(c,dsK)));
     return '<div class="card weekday-card"><div class="row-between"><h3 style="margin:0">'+DAY_NAMES[k]+'</h3>'
       +'<button class="btn sage small" onclick="addCardForDay(\''+k+'\')">＋</button></div>'
-      +(dayCards.length? dayCards.map(c=>'<div class="taskrow"><div class="tt"><b>'+esc(c.title)+'</b>'+whoTag(effWho(c))+'<div class="progress-note">'+esc(cardMeta(c))+'</div></div>'
+      +(dayCards.length? dayCards.map(c=>'<div class="taskrow"><div class="tt"><b>'+esc(c.title)+'</b>'+whoTag(effWho(c,dsK))+'<div class="progress-note">'+esc(cardMeta(c))+'</div></div>'
         +'<button class="iconbtn" onclick="editCard(\''+c.id+'\')">✏️</button></div>').join("")
         :'<div class="empty">Nothing scheduled.</div>')+'</div>';
   }).join("");
