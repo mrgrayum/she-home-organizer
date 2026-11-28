@@ -1036,7 +1036,7 @@ window.saveNewRoutine=async ()=>{
 function boardRow(c){
   return '<div class="taskrow" onmousedown="lpStart(\''+c.id+'\')" onmouseup="lpEnd()" onmouseleave="lpEnd()" ontouchstart="lpStart(\''+c.id+'\')" ontouchend="lpEnd()" ontouchmove="lpEnd()" oncontextmenu="return false">'
     +'<button class="check" onclick="doDone(\''+c.id+'\')" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()"></button>'
-    +'<div class="tt" onclick="rowEdit(\''+c.id+'\')"><b>'+esc(c.title)+'</b><div class="progress-note">'+esc(cardMeta(c,true))+'</div></div>'
+    +'<div class="tt" onclick="rowEdit(\''+c.id+'\')"><b>'+esc(c.title)+'</b><div class="progress-note">'+esc(cardMeta(c,true))+'</div>'+(rotNote(c)?'<div class="progress-note">'+esc(rotNote(c))+'</div>':"")+'</div>'
     +'<span class="minutes">'+(c.minutes?c.minutes+"m":"")+'</span></div>';
 }
 function routineStepsHtml(rid){
@@ -1364,6 +1364,17 @@ function effWho(c, ds){
     return list[((p%list.length)+list.length)%list.length];
   }
   return c.who||null;
+}
+function rotNote(c){
+  if(!c.rotate || c.rotate.length<2) return "";
+  const rot = c.rotate.filter(id=>memberById(id));
+  if(rot.length<2) return "";
+  const cur = effWho(c); const i = rot.indexOf(cur);
+  if(i<0) return "";
+  const order = rot.slice(i).concat(rot.slice(0,i)).map(id=>memberById(id).name);
+  const next = memberById(rot[(i+1)%rot.length]);
+  const when = c.cadence==="daily" ? "tomorrow" : (c.cadence==="monthly" ? "next month" : "next week");
+  return "🔄 Rotating: "+order.join(" → ")+(next ? " · Next: "+next.name+" "+when : "");
 }
 window.rotToggle=()=>{
   const cb=$("f-rotate");
