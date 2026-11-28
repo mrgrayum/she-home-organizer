@@ -1537,7 +1537,7 @@ function memberRemaining(mid){
 function displayRow(c){
   return '<div class="taskrow drow">'
     +'<button class="check" onclick="doDone(\''+c.id+'\')"></button>'
-    +'<div class="tt"><b>'+esc(c.title)+'</b>'+(c.room?'<div class="progress-note">'+esc(c.room)+'</div>':"")+'</div>'
+    +'<div class="tt"><b>'+esc(c.title)+'</b>'+(c.room?'<div class="progress-note">'+esc(c.room)+'</div>':"")+(rotNote(c)?'<div class="progress-note">'+esc(rotNote(c))+'</div>':"")+'</div>'
     +'<span class="minutes">'+(c.minutes?c.minutes+"m":"")+'</span></div>';
 }
 function celebSound(){
