@@ -1678,10 +1678,10 @@ function openModalForNew(preset){
   window._preset=preset||{};
   window._rotSel=[]; window._rotCard=null;
   const defCat=(typeof currentCat!=="undefined"&&currentCat&&currentCat!=="all"&&currentCat!=="todo")?currentCat:"basicweek";
-  const c=Object.assign({title:"",category:defCat,room:"",minutes:15,cadence:"once",notes:"",day:null,dueDate:"",monthWeek:null,active:true},preset||{}); if(c.category==="day"&&!c.dueDate) c.dueDate=todayStr();
+  const c=Object.assign({title:"",category:defCat,room:"",minutes:15,cadence:"once",notes:"",day:null,dueDate:"",monthWeek:null,active:true},preset||{}); if(c.category==="zones"||c.category==="menus") c.category="basicweek"; if(c.category==="day"&&!c.dueDate) c.dueDate=todayStr();
   openModal('<h2>New card</h2>'
     +'<label>Title</label><input id="f-title" value="'+esc(c.title)+'" placeholder="e.g. Wipe the microwave">'
-    +'<label>Divider (category)</label><select id="f-cat" onchange="catMode(this.value)">'+Object.keys(CATS).filter(k2=>k2!=="todo").map(k2=>'<option value="'+k2+'"'+(c.category===k2?" selected":"")+'>'+CATS[k2]+'</option>').join("")+'</select>'
+    +'<label>Divider (category)</label><select id="f-cat" onchange="catMode(this.value)">'+Object.keys(CATS).filter(k2=>k2!=="todo"&&k2!=="zones"&&k2!=="menus").map(k2=>'<option value="'+k2+'"'+(c.category===k2?" selected":"")+'>'+CATS[k2]+'</option>').join("")+'</select>'
     +(fam().length?'<label>Belongs to</label><select id="f-who">'+whoOptions(c.who)+'</select>':"")
     +'<label class="disp-member" style="margin-top:.35rem"><input type="checkbox" id="f-game"'+(c.game?" checked":"")+' style="width:22px;height:22px;flex:none"> 🎮 Surprise game after this card <span class="progress-note">— panel only; kids can\'t see this</span></label>'
     +'<label class="disp-member" id="f-rotrow" style="margin-top:.35rem"><input type="checkbox" id="f-rotate"'+(c.rotate&&c.rotate.length?" checked":"")+' onchange="rotToggle()" style="width:22px;height:22px;flex:none"> 🔄 Rotating <span class="progress-note">— takes turns between people</span></label>'
